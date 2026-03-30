@@ -1,0 +1,830 @@
+# Impact Analysis (iA) Tools for IBM i
+# Source: programmers.io ia-mcp-server — 20 tools for code impact analysis
+# These tools query the iA repository tables (pre-parsed IBM i source metadata).
+#
+# IMPORTANT: The library is configured via the IA_LIBRARY environment variable.
+# Default iA library: SDK01 (set IA_LIBRARY in .env to override).
+#
+# Tables queried: IAALLREFPF, IAPGMCALLS, IAFIDTL, IAPGMVARS, IAPGMDS,
+#   IACALLPARM, IASUBRDTL, IAOVRPF, IAPGMINF, IAPGMREF, IACPGMREF,
+#   OBJECT_DETAILS, IA_DASHBOARD_DETAIL, REPO_CONFIGURATION, IAEXCPLOG,
+#   DDSTODDL_FILE_CONVERSION_DETAILS, IASRCMBRID
+
+sources:
+  ibmi:
+    host: ${DB2i_HOST}
+    user: ${DB2i_USER}
+    password: "${DB2i_PASS}"
+    port: ${DB2i_PORT}
+    ignore-unauthorized: true
+
+tools:
+
+  # ── 1. Where Used — find all objects referencing a given object ──────────
+  ia_where_used:
+    name: ia-where-used
+    source: ibmi
+    description: >
+      Find every program, service program, command, display file, and logical file
+      that references a specific object. Most common impact analysis query.
+      Use before modifying or deleting any object to understand the blast radius.
+      Queries the iA IAALLREFPF cross-reference table (richer than DSPPGMREF).
+    parameters:
+      - name: object_name
+        type: string
+        description: "IBM i object name to search for (e.g., ORDERFILE, CUSTPGM)"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: object_type
+        type: string
+        description: "Filter by type: *ALL, *PGM, *SRVPGM, *FILE, *DSPF, *CMD (default: *ALL)"
+        required: false
+        default: "*ALL"
+      - name: limit
+        type: integer
+        description: "Max results (default: 200)"
+        required: false
+        default: 200
+        min: 1
+        max: 5000
+    statement: |
+      SELECT DISTINCT
+        OBJECT_NAME AS using_object,
+        OBJECT_TYPE AS using_type,
+        OBJECT_ATTR AS using_attr,
+        REFERENCED_OBJ AS referenced_object,
+        REFERENCED_OBJTYP AS referenced_type,
+        MAPED_FROM AS reference_source
+      FROM ${IA_LIBRARY}.IAALLREFPF
+      WHERE REFERENCED_OBJ = :object_name
+        AND (:object_type = '*ALL' OR REFERENCED_OBJTYP = :object_type)
+      ORDER BY OBJECT_TYPE, OBJECT_NAME
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 2. Call Hierarchy — program call tree (callers/callees/both) ────────
+  ia_call_hierarchy:
+    name: ia-call-hierarchy
+    source: ibmi
+    description: >
+      Generate the call tree for a program — who calls it (CALLERS), what it calls
+      (CALLEES), or both. Includes procedure-level detail and call sequence numbers.
+      Queries IAPGMCALLS — captures CALL, CALLP, and bound module references.
+    parameters:
+      - name: program_name
+        type: string
+        description: "Program or module name"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: direction
+        type: string
+        description: "CALLERS, CALLEES, or BOTH (default: BOTH)"
+        required: false
+        default: "BOTH"
+      - name: limit
+        type: integer
+        description: "Max results (default: 200)"
+        required: false
+        default: 200
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        'CALLEES' AS direction,
+        MBR_NAME AS source_program,
+        CALLED_OBJCT AS target_program,
+        FROM_PROC AS calling_procedure,
+        CALLED_PROC AS called_procedure,
+        CALL_SEQ AS call_sequence
+      FROM ${IA_LIBRARY}.IAPGMCALLS
+      WHERE MBR_NAME = :program_name
+        AND :direction IN ('CALLEES', 'BOTH')
+      UNION ALL
+      SELECT
+        'CALLERS' AS direction,
+        MBR_NAME AS source_program,
+        CALLED_OBJCT AS target_program,
+        FROM_PROC AS calling_procedure,
+        CALLED_PROC AS called_procedure,
+        CALL_SEQ AS call_sequence
+      FROM ${IA_LIBRARY}.IAPGMCALLS
+      WHERE CALLED_OBJCT = :program_name
+        AND :direction IN ('CALLERS', 'BOTH')
+      ORDER BY direction, call_sequence
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 3. Field Impact — blast radius of changing a field ──────────────────
+  ia_field_impact:
+    name: ia-field-impact
+    source: ibmi
+    description: >
+      Analyze the blast radius of changing a specific field in a database file.
+      Returns all programs that reference the file, cross-referenced with field-level usage.
+      Critical before any field-level schema change (resize, rename, retype).
+      Combines IAALLREFPF (cross-references) with IAFIDTL (field details).
+    parameters:
+      - name: file_name
+        type: string
+        description: "Physical or logical file name (e.g., ORDERFILE)"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: field_name
+        type: string
+        description: "Field name to analyze (e.g., CUSTNO)"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: limit
+        type: integer
+        description: "Max results (default: 500)"
+        required: false
+        default: 500
+        min: 1
+        max: 5000
+    statement: |
+      SELECT DISTINCT
+        ref.OBJECT_NAME AS affected_object,
+        ref.OBJECT_TYPE AS object_type,
+        ref.OBJECT_ATTR AS object_attr,
+        ref.MAPED_FROM AS reference_type,
+        fld.FIELD_DATA_TYPE AS field_type,
+        fld.FIELD_USE_MODE AS field_usage
+      FROM ${IA_LIBRARY}.IAALLREFPF ref
+      LEFT JOIN ${IA_LIBRARY}.IAFIDTL fld
+        ON fld.MEMBER_NAME = ref.OBJECT_NAME
+        AND fld.FIELD_NAME_INTERNAL = :field_name
+      WHERE ref.REFERENCED_OBJ = :file_name
+      ORDER BY ref.OBJECT_TYPE, ref.OBJECT_NAME
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 4. Program Variables — all variables declared in a program ──────────
+  ia_program_variables:
+    name: ia-program-variables
+    source: ibmi
+    description: >
+      List all variables declared in a program/module with full type information.
+      Includes standalone fields, data structure subfields, indicators, and constants.
+      Queries IAPGMVARS — parsed from source code by iA's RPG/CL parser.
+    parameters:
+      - name: member_name
+        type: string
+        description: "Source member name (e.g., ORDHIST)"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: limit
+        type: integer
+        description: "Max results (default: 500)"
+        required: false
+        default: 500
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        IAV_VAR AS variable_name,
+        IAV_TYP AS variable_type,
+        IAV_DTYP AS data_type,
+        IAV_LEN AS field_length,
+        IAV_DEC AS decimal_positions,
+        IAV_DIM AS array_dimension,
+        IAV_DSFLD AS ds_field_flag
+      FROM ${IA_LIBRARY}.IAPGMVARS
+      WHERE IAV_MBR = :member_name
+      ORDER BY IAV_VAR
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 5. Data Structures — DS definitions with subfields ──────────────────
+  ia_data_structures:
+    name: ia-data-structures
+    source: ibmi
+    description: >
+      Get all data structure definitions in a program, including nested DS, based DS,
+      qualified DS, and their subfields with positional info.
+      Queries IAPGMDS — parsed from D-specs and free-format DCL-DS.
+    parameters:
+      - name: member_name
+        type: string
+        description: "Source member name"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: limit
+        type: integer
+        description: "Max results (default: 500)"
+        required: false
+        default: 500
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        DATASTR_NAME AS ds_name,
+        DS_FLD_NAME AS field_name,
+        DS_FLD_TYPE AS field_type,
+        FROM_LEN_FLD AS from_position,
+        TO_LEN_FLD AS to_position,
+        DS_FLD_RANK AS field_rank,
+        DS_BASED_NAM AS based_on,
+        DS_QUALIFIED AS qualified_flag
+      FROM ${IA_LIBRARY}.IAPGMDS
+      WHERE MEMBER_NAME = :member_name
+      ORDER BY DATASTR_NAME, DS_FLD_RANK
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 6. Call Parameters — parameters passed to external calls ────────────
+  ia_call_parameters:
+    name: ia-call-parameters
+    source: ibmi
+    description: >
+      Get parameter details for all external calls made by a program.
+      Shows what data is passed to each called program/procedure.
+      Queries IACALLPARM — parameter names, types, and lengths.
+    parameters:
+      - name: member_name
+        type: string
+        description: "Source member of the calling program"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: limit
+        type: integer
+        description: "Max results (default: 500)"
+        required: false
+        default: 500
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        CALLED_OBJECT AS called_program,
+        PARM_NAME AS parameter_name,
+        PARM_TYPE AS parameter_type,
+        PARM_LENGTH AS parameter_length,
+        PARM_SEQUENCE AS parameter_sequence
+      FROM ${IA_LIBRARY}.IACALLPARM
+      WHERE MBR_NAME = :member_name
+      ORDER BY CALLED_OBJECT, PARM_SEQUENCE
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 7. Subroutines — BEGSR/ENDSR details with usage counts ─────────────
+  ia_subroutines:
+    name: ia-subroutines
+    source: ibmi
+    description: >
+      List all subroutines (BEGSR/ENDSR) in a program with usage counts.
+      Helps understand internal program structure and identify dead subroutines.
+      Queries IASUBRDTL — EXSR/BEGSR mapping with line numbers.
+    parameters:
+      - name: member_name
+        type: string
+        description: "Source member name"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: limit
+        type: integer
+        description: "Max results (default: 200)"
+        required: false
+        default: 200
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        SR_SBR_NAME AS subroutine_name,
+        SR_OPCODE AS opcode,
+        SR_CNT AS usage_count,
+        SR_RRN AS line_number
+      FROM ${IA_LIBRARY}.IASUBRDTL
+      WHERE SR_MBR_NAME = :member_name
+      ORDER BY SR_SBR_NAME
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 8. File Overrides — OVRDBF statements (file routing) ───────────────
+  ia_file_overrides:
+    name: ia-file-overrides
+    source: ibmi
+    description: >
+      Get all OVRDBF (Override with Database File) statements. Critical for
+      understanding actual file routing vs. what is declared in F-specs.
+      File overrides can silently redirect I/O to different files.
+      Pass '*ALL' for member_name to see all overrides across all members.
+      Queries IAOVRPF.
+    parameters:
+      - name: member_name
+        type: string
+        description: "Source member name, or '*ALL' for all overrides"
+        required: false
+        default: "*ALL"
+        maxLength: 10
+      - name: limit
+        type: integer
+        description: "Max results (default: 200)"
+        required: false
+        default: 200
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        IOVR_MBR AS member_name,
+        IOVR_FROM AS from_file,
+        IOVR_TO AS to_file,
+        IOVR_SCP AS override_scope,
+        IOVR_RRN AS line_number
+      FROM ${IA_LIBRARY}.IAOVRPF
+      WHERE (:member_name = '*ALL' OR IOVR_MBR = :member_name)
+      ORDER BY IOVR_MBR, IOVR_RRN
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 9. File Fields — field-level metadata for a database file ───────────
+  ia_file_fields:
+    name: ia-file-fields
+    source: ibmi
+    description: >
+      Get field-level metadata for a database file: internal names, data types,
+      reference files, usage mode, and record formats. Richer than DSPFFD because
+      it includes iA parsed cross-reference data. Queries IAFIDTL.
+    parameters:
+      - name: file_name
+        type: string
+        description: "Database file name"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: limit
+        type: integer
+        description: "Max results (default: 500)"
+        required: false
+        default: 500
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        FILE_NAME,
+        FIELD_NAME_INTERNAL AS internal_name,
+        FIELD_DATA_TYPE AS data_type,
+        REF_FILE AS reference_file,
+        FIELD_USE_MODE AS usage_mode,
+        RECORD_FORMAT AS record_format
+      FROM ${IA_LIBRARY}.IAFIDTL
+      WHERE FILE_NAME = :file_name
+      ORDER BY FIELD_NAME_INTERNAL
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 10. Object List — repository inventory by type ──────────────────────
+  ia_object_list:
+    name: ia-object-list
+    source: ibmi
+    description: >
+      List all objects in the iA repository with metadata: type, library,
+      source file/member, creation date, and exclusion status.
+      Use to discover available objects before running impact analysis.
+      Queries OBJECT_DETAILS — the master object inventory.
+    parameters:
+      - name: object_type
+        type: string
+        description: "Filter: *ALL, *PGM, *SRVPGM, *FILE, *DSPF, *CMD, *DTAARA, *MODULE (default: *ALL)"
+        required: false
+        default: "*ALL"
+      - name: limit
+        type: integer
+        description: "Max results (default: 500)"
+        required: false
+        default: 500
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        OBJECT_NAME, OBJECT_TYPE, OBJECT_LIBRARY,
+        SOURCE_FILE, SOURCE_MEMBER,
+        CREATION_DATE, EXCLUDED_FLAG
+      FROM ${IA_LIBRARY}.OBJECT_DETAILS
+      WHERE (:object_type = '*ALL' OR OBJECT_TYPE = :object_type)
+      ORDER BY OBJECT_TYPE, OBJECT_NAME
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 11. Program Info — program/module metadata ──────────────────────────
+  ia_program_info:
+    name: ia-program-info
+    source: ibmi
+    description: >
+      Get detailed metadata for a program or module: source file, member,
+      attributes, and last change date. Queries IAPGMINF.
+    parameters:
+      - name: program_name
+        type: string
+        description: "Program or module name"
+        required: true
+        minLength: 1
+        maxLength: 10
+    statement: |
+      SELECT
+        PGM_NAME, MOD_NAME, SRC_FILE, SRC_MBR,
+        MOD_ATTRIB, SRC_CHGDATE
+      FROM ${IA_LIBRARY}.IAPGMINF
+      WHERE PGM_NAME = :program_name OR MOD_NAME = :program_name
+
+  # ── 12. RPG Source Tokens — token-level RPG source analysis ─────────────
+  ia_rpg_source_tokens:
+    name: ia-rpg-source-tokens
+    source: ibmi
+    description: >
+      Get the token-level analysis of an RPG source member — every word/token
+      categorized by the iA parser. This is the deepest level of RPG source
+      analysis available. Queries IAPGMREF.
+    parameters:
+      - name: member_name
+        type: string
+        description: "Source member name"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: limit
+        type: integer
+        description: "Max results (default: 2000)"
+        required: false
+        default: 2000
+        min: 1
+        max: 10000
+    statement: |
+      SELECT *
+      FROM ${IA_LIBRARY}.IAPGMREF
+      WHERE MBR_NAME = :member_name
+      ORDER BY RRN_NUMBER
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 13. CL Source Tokens — token-level CL source analysis ──────────────
+  ia_cl_source_tokens:
+    name: ia-cl-source-tokens
+    source: ibmi
+    description: >
+      Get the token-level analysis of a CL source member — every word/token
+      categorized by the iA parser. Queries IACPGMREF.
+    parameters:
+      - name: member_name
+        type: string
+        description: "Source member name"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: limit
+        type: integer
+        description: "Max results (default: 2000)"
+        required: false
+        default: 2000
+        min: 1
+        max: 10000
+    statement: |
+      SELECT *
+      FROM ${IA_LIBRARY}.IACPGMREF
+      WHERE MBR_NAME = :member_name
+      ORDER BY RRN_NUMBER
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 14. Dashboard — repository health summary ──────────────────────────
+  ia_dashboard:
+    name: ia-dashboard
+    source: ibmi
+    description: >
+      Get the iA dashboard summary: member categories (compiled, unused, orphaned),
+      line counts, and library mappings. Good overview of repository health.
+      Queries IA_DASHBOARD_DETAIL.
+    parameters:
+      - name: limit
+        type: integer
+        description: "Max results (default: 500)"
+        required: false
+        default: 500
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        MEMBER_NAME, MEMBER_TYPE, MEMBER_CATEGORY,
+        MEMBER_LINES, MEMBER_LIBRARY,
+        OBJECT_LIBRARY
+      FROM ${IA_LIBRARY}.IA_DASHBOARD_DETAIL
+      ORDER BY MEMBER_TYPE, MEMBER_NAME
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 15. Repo Config — repository configuration settings ─────────────────
+  ia_repo_config:
+    name: ia-repo-config
+    source: ibmi
+    description: >
+      Get the iA repository configuration settings (IFS locations, scan options, etc.).
+      Queries REPO_CONFIGURATION.
+    parameters: []
+    statement: |
+      SELECT KEY_NAME1, KEY_VALUE1
+      FROM ${IA_LIBRARY}.REPO_CONFIGURATION
+
+  # ── 16. Exception Log — parser error log ────────────────────────────────
+  ia_exception_log:
+    name: ia-exception-log
+    source: ibmi
+    description: >
+      View iA parser exceptions — useful for understanding why certain members
+      may have incomplete analysis or missing cross-references.
+      Pass '*ALL' for member_name to see all exceptions. Queries IAEXCPLOG.
+    parameters:
+      - name: member_name
+        type: string
+        description: "Filter by member name, or '*ALL' for all exceptions"
+        required: false
+        default: "*ALL"
+        maxLength: 10
+      - name: limit
+        type: integer
+        description: "Max results (default: 100)"
+        required: false
+        default: 100
+        min: 1
+        max: 5000
+    statement: |
+      SELECT *
+      FROM ${IA_LIBRARY}.IAEXCPLOG
+      WHERE (:member_name = '*ALL' OR MEMBER_NAME = :member_name)
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 17. DDS to DDL Status — conversion tracking ────────────────────────
+  ia_dds_to_ddl_status:
+    name: ia-dds-to-ddl-status
+    source: ibmi
+    description: >
+      View the status of DDS to DDL (SQL) file conversions tracked by iA.
+      Shows which files have been converted, pending, and dependent programs.
+      Queries DDSTODDL_FILE_CONVERSION_DETAILS.
+    parameters:
+      - name: limit
+        type: integer
+        description: "Max results (default: 200)"
+        required: false
+        default: 200
+        min: 1
+        max: 5000
+    statement: |
+      SELECT *
+      FROM ${IA_LIBRARY}.DDSTODDL_FILE_CONVERSION_DETAILS
+      ORDER BY 1
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 18. Reference Count — quick count of references by type ─────────────
+  ia_reference_count:
+    name: ia-reference-count
+    source: ibmi
+    description: >
+      Get a quick count of how many objects reference a given object, grouped by
+      object type. Lightweight alternative to ia_where_used when you only need
+      the numbers, not the full list.
+    parameters:
+      - name: object_name
+        type: string
+        description: "Object name to count references for"
+        required: true
+        minLength: 1
+        maxLength: 10
+    statement: |
+      SELECT
+        REFERENCED_OBJ AS object_name,
+        OBJECT_TYPE AS referencing_type,
+        COUNT(*) AS reference_count
+      FROM ${IA_LIBRARY}.IAALLREFPF
+      WHERE REFERENCED_OBJ = :object_name
+      GROUP BY REFERENCED_OBJ, OBJECT_TYPE
+      ORDER BY reference_count DESC
+
+  # ── 19. Unused Objects — dead code candidates ───────────────────────────
+  ia_unused_objects:
+    name: ia-unused-objects
+    source: ibmi
+    description: >
+      Find objects in the repository that are not referenced by any other object.
+      Useful for identifying dead code candidates for cleanup.
+    parameters:
+      - name: object_type
+        type: string
+        description: "Filter by type (*ALL, *PGM, *SRVPGM, *FILE)"
+        required: false
+        default: "*ALL"
+    statement: |
+      SELECT
+        od.OBJECT_NAME,
+        od.OBJECT_TYPE,
+        od.OBJECT_LIBRARY,
+        od.CREATION_DATE
+      FROM ${IA_LIBRARY}.OBJECT_DETAILS od
+      LEFT JOIN ${IA_LIBRARY}.IAALLREFPF ref
+        ON od.OBJECT_NAME = ref.REFERENCED_OBJ
+      WHERE ref.REFERENCED_OBJ IS NULL
+        AND (:object_type = '*ALL' OR od.OBJECT_TYPE = :object_type)
+      ORDER BY od.OBJECT_TYPE, od.OBJECT_NAME
+      FETCH FIRST 500 ROWS ONLY
+
+  # ── 20. Circular Dependencies — detect circular call chains ─────────────
+  ia_circular_deps:
+    name: ia-circular-deps
+    source: ibmi
+    description: >
+      Detect circular dependencies — programs that call each other directly
+      or indirectly. These create maintenance risks and can cause infinite loops.
+    parameters: []
+    statement: |
+      SELECT DISTINCT
+        a.MBR_NAME AS program_a,
+        a.CALLED_OBJCT AS program_b,
+        'CIRCULAR' AS dependency_type
+      FROM ${IA_LIBRARY}.IAPGMCALLS a
+      JOIN ${IA_LIBRARY}.IAPGMCALLS b
+        ON a.CALLED_OBJCT = b.MBR_NAME
+        AND b.CALLED_OBJCT = a.MBR_NAME
+      ORDER BY program_a
+
+  # ── 21. Where Used Detail — references with source existence check ──────
+  ia_where_used_detail:
+    name: ia-where-used-detail
+    source: ibmi
+    description: >
+      Enhanced where-used lookup that finds all objects referencing a given object
+      (by name, type, and library) and checks whether each referencing object has
+      source code available. Joins IAALLREFPF with IAOBJMAP to add a SOURCE_EXIST
+      flag (Y/N). Use this when you need library-level precision and want to know
+      which callers still have editable source vs. compiled-only objects.
+    parameters:
+      - name: ref_object_name
+        type: string
+        description: "Referenced object name to search for (e.g., IASRV01SV)"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: ref_object_type
+        type: string
+        description: "Referenced object type (e.g., *MODULE, *PGM, *SRVPGM, *FILE)"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: ref_object_lib
+        type: string
+        description: "Referenced object library (e.g., #IAOBJ, MYLIB)"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: limit
+        type: integer
+        description: "Max results (default: 200)"
+        required: false
+        default: 200
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        I.IAOOBJNAM AS using_object,
+        I.IAOOBJTYP AS using_type,
+        I.IAOOBJLIB AS using_library,
+        I.IAOOBJATR AS using_attr,
+        I.IAOOBJTXT AS using_text,
+        I.IARUSAGES AS usage_type,
+        I.IAROBJNAM AS referenced_object,
+        I.IAROBJTYP AS referenced_type,
+        I.IAROBJLIB AS referenced_library,
+        CASE WHEN M.MEMBER_LIBR IS NULL OR M.MEMBER_SRCF IS NULL OR
+          M.MEMBER_NAME IS NULL THEN 'N' ELSE 'Y' END AS source_exist
+      FROM ${IA_LIBRARY}.IAALLREFPF I
+      LEFT OUTER JOIN ${IA_LIBRARY}.IAOBJMAP M
+        ON I.IAOOBJNAM = M.OBJECT_NAME
+        AND I.IAOOBJTYP = M.OBJECT_TYPE
+        AND I.IAOOBJLIB = M.OBJECT_LIBR
+      WHERE I.IAROBJNAM = :ref_object_name
+        AND I.IAROBJTYP = :ref_object_type
+        AND I.IAROBJLIB = :ref_object_lib
+      ORDER BY I.IAOOBJTYP, I.IAOOBJNAM
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 22. Override Chain — chained OVRDBF dependencies ────────────────────
+  ia_override_chain:
+    name: ia-override-chain
+    source: ibmi
+    description: >
+      Find all file override chains — cases where file A is overridden to file B,
+      which may itself be overridden to file C. These chains create hidden
+      dependencies that are critical to understand.
+    parameters: []
+    statement: |
+      SELECT
+        a.IOVR_MBR AS member,
+        a.IOVR_FROM AS original_file,
+        a.IOVR_TO AS override_target,
+        b.IOVR_TO AS chain_target,
+        CASE WHEN b.IOVR_TO IS NOT NULL THEN 'CHAINED' ELSE 'DIRECT' END AS override_type
+      FROM ${IA_LIBRARY}.IAOVRPF a
+      LEFT JOIN ${IA_LIBRARY}.IAOVRPF b
+        ON a.IOVR_TO = b.IOVR_FROM
+        AND a.IOVR_MBR = b.IOVR_MBR
+      ORDER BY a.IOVR_MBR, a.IOVR_FROM
+
+  # ── 23. Object Lifecycle — creation, change, and last-used dates ────────
+  ia_object_lifecycle:
+    name: ia-object-lifecycle
+    source: ibmi
+    description: >
+      Get lifecycle metadata for an object: creation date/time, last change date/time,
+      last-used date, days-used count, and object text. Use to understand how recently
+      an object was modified or accessed — helpful for identifying stale objects or
+      verifying deployment freshness. Queries IAOBJECT.
+    parameters:
+      - name: object_name
+        type: string
+        description: "IBM i object name (e.g., IASRV02SV, CUSTPGM)"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: object_library
+        type: string
+        description: "Object library (e.g., #IAOBJ, MYLIB)"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: object_type
+        type: string
+        description: "Object type (e.g., *MODULE, *PGM, *SRVPGM, *FILE, *CMD)"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: limit
+        type: integer
+        description: "Max results (default: 200)"
+        required: false
+        default: 200
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        OBJECT_NAME,
+        OBJECT_LIBRARY,
+        OBJECT_TYPE,
+        CREATION_DATE,
+        CREATION_TIME,
+        CHANGE_DATE,
+        CHANGE_TIME,
+        LASTUSED_DATE AS last_used_date,
+        DAYS_USED_COUNT AS days_used,
+        OBJECT_TEXT
+      FROM ${IA_LIBRARY}.IAOBJECT
+      WHERE OBJECT_NAME = :object_name
+        AND OBJECT_LIBRARY = :object_library
+        AND OBJECT_TYPE = :object_type
+      ORDER BY OBJECT_NAME
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 24. Code Complexity — complexity metrics per source member ──────────
+  ia_code_complexity:
+    name: ia-code-complexity
+    source: ibmi
+    description: >
+      Code complexity metrics per source member — IF/DO/SQL/GOTO/PROC counts,
+      total and executable line counts, and call statistics. Use to identify the
+      most complex, risky programs that need refactoring or extra testing.
+      Queries IA_CODE_INFO.
+    parameters:
+      - name: member_name
+        type: string
+        description: "Source member name (e.g., IASRV01SV). Use '*ALL' to list all members."
+        required: false
+        default: "*ALL"
+        maxLength: 10
+      - name: limit
+        type: integer
+        description: "Max results (default: 200)"
+        required: false
+        default: 200
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        MEMBER_NAME,
+        MEMBER_TYPE,
+        SOURCE_FORMAT,
+        TOTAL_LINES,
+        EXEC_LINES,
+        NON_EXEC_LINES,
+        IF_COUNT,
+        DO_COUNT,
+        FOR_COUNT,
+        SEL_COUNT AS select_count,
+        WHEN_COUNT,
+        AND_COUNT,
+        OR_COUNT,
+        ELSE_COUNT,
+        SBR_COUNT AS subroutine_count,
+        PROC_COUNT AS procedure_count,
+        SQL_COUNT AS sql_statement_count,
+        GOTO_COUNT,
+        CAB_COUNT,
+        CAS_COUNT,
+        FILE_COUNT,
+        DEVF_COUNT AS display_file_count,
+        CALL_PGM_COUNT,
+        CALLED_BY_PGM AS called_by_count,
+        ALL_COUNT AS total_operations
+      FROM ${IA_LIBRARY}.IA_CODE_INFO
+      WHERE (:member_name = '*ALL' OR MEMBER_NAME = :member_name)
+      ORDER BY TOTAL_LINES DESC
+      FETCH FIRST :limit ROWS ONLY
