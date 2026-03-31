@@ -1,0 +1,10 @@
+{
+  "servers": {
+    "ibmi-ia-tools": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@ibm/ibmi-mcp-server@latest", "--tools", "./impact-analysis.yaml"],
+      "envFile": ".env"
+    }
+  }
+}
