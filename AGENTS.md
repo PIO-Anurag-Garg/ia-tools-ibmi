@@ -37,6 +37,7 @@ You need this context to interpret tool results correctly.
 | "What if I change field F in file X?" | `ia_field_impact` | Goes straight to field-level blast radius |
 | "Show the call tree for program X" | `ia_call_hierarchy` | Directly answers the call flow question |
 | "What variables does program X use?" | `ia_program_variables` | Directly answers the variable inspection question |
+| "Which logicals are over physical file X?" | `execute_sql` on `IADSPDBR` | Shows physical-to-logical file dependencies from DSPDBR output |
 | "Can I safely delete/modify X?" | `ia_where_used` | Start broad, then drill down based on results |
 | "I want to retire/decommission X" | `ia_where_used` | Need the full dependency picture first |
 
@@ -47,6 +48,7 @@ You need this context to interpret tool results correctly.
 | `*PGM` or `*SRVPGM` names | `ia_call_hierarchy` on those programs | Understand where they sit in the execution chain |
 | `*SRVPGM` specifically | `ia_where_used` on that service program | Measure the cascade — how many programs bind to it |
 | `*FILE` names | `ia_field_impact` for specific fields | Drill into field-level dependencies |
+| `*FILE` (physical) names | `execute_sql` on `IADSPDBR` | Find logical files/views/indexes built over the physical file |
 | `*DSPF` names | `ia_where_used` on the display file | Find which programs present that screen to users |
 | Programs with null `field_usage` | `ia_program_variables` on those programs | Confirm whether they actually use the field in question |
 | Variable names that look like DB fields | `ia_where_used` on the program | Find which files the program references, then cross-check |
@@ -220,6 +222,58 @@ If any `*SRVPGM` is in the dependency chain, check its dependents and adjust the
 **Step 4 — Present a clear verdict with evidence:**
 Do NOT just say "here are the results." State the risk explicitly:
 > "**Moderate risk.** Modifying CUSTMAST affects 12 programs directly. No service programs are involved, so cascading impact is limited. The 2 display files (CUSTINQ, CUSTMNT) mean users will see changes. Recommend testing the 4 programs that write to CUSTMAST first."
+
+---
+
+### Playbook 7: "Which logical files are built on top of physical file X?" (File Dependency Analysis)
+
+Use the `IADSPDBR` table — it stores output from the IBM i `DSPDBR` (Display Database Relations) command and maps physical-to-logical file dependencies.
+
+**Step 1 — Find logical files built over a physical file:**
+```
+execute_sql(sql="SELECT WHREFI AS dependent_file, WHRELI AS dependent_library, WHTYPE AS dependency_type FROM IADEMODEV.IADSPDBR WHERE WHRFI = '<FILE_NAME>' AND WHREFI <> '' FETCH FIRST 100 ROWS ONLY")
+```
+
+**Step 2 — Interpret dependency types:**
+
+| `WHTYPE` | Meaning |
+|----------|---------|
+| `D` | Data dependency — logical file shares data with the physical file |
+| `I` | Access path — logical file provides an index/key over the physical file |
+| `O` | Access path owner — owns the access path |
+| `V` | SQL VIEW built over the physical file |
+| `C` | Constraint relationship (referential integrity) |
+
+**Step 3 — Summarize clearly:**
+> "Physical file CUSTMAST has **4 logical files** built over it: CUSTL1 (access path keyed by CUSTNO), CUSTL2 (access path keyed by CUSTNM), CUSTVIEW (SQL VIEW), and ORDCUSTJ (data dependency via join logical)."
+
+**Step 4 — Flag risk for schema changes:**
+If the user is planning to modify the physical file, warn them:
+> "Changing the physical file structure (adding/removing/resizing fields) may break these logical files. Each logical file — and every program that references those logical files — could be affected."
+
+**Step 5 — Chain with other tools:**
+- Use `ia_where_used` on each dependent logical file to find programs that reference it
+- Use `ia_field_impact` to check field-level impact across all dependent files
+
+**Step 6 — Ask follow-up questions:**
+- *"Would you like me to check which programs reference these logical files using `ia_where_used`?"*
+- *"Are you planning to modify the physical file structure? I can assess the full blast radius including all logical file dependents."*
+- *"Would you like to see all physical files in a specific library that have no logical files (potential candidates for adding indexes)?"*
+
+**Useful queries against IADSPDBR:**
+
+- **All dependencies for a file:**
+  ```sql
+  SELECT * FROM IADEMODEV.IADSPDBR WHERE WHRFI = '<FILE>' AND WHREFI <> '' FETCH FIRST 100 ROWS ONLY
+  ```
+- **Physical files with zero logical files (no indexes):**
+  ```sql
+  SELECT WHRFI, WHRLI FROM IADEMODEV.IADSPDBR WHERE WHRTYP = 'P' AND WHNO = 0 FETCH FIRST 100 ROWS ONLY
+  ```
+- **All constraint relationships:**
+  ```sql
+  SELECT WHRFI, WHRLI, WHREFI, WHRELI, WHCSTN FROM IADEMODEV.IADSPDBR WHERE WHTYPE = 'C' FETCH FIRST 100 ROWS ONLY
+  ```
 
 ---
 

@@ -27,12 +27,12 @@ Use them with **VS Code GitHub Copilot**, **Claude Code**, or any MCP-compatible
 | 5 | `ia_where_used_detail` | Enhanced where-used with source existence check |
 | 6 | `ia_library_files` | List all files/tables in the iA library |
 
-### Built-in MCP Server Tools (enabled via `--execute-sql` flag)
+### Built-in MCP Server Tools
 
-| Tool | Description |
-|------|-------------|
-| `execute_sql` | Run any SELECT query the AI agent constructs (read-only by default) |
-| `describe_sql_object` | Get DDL/schema for any table, view, index, or procedure |
+| Tool | Description | Enabled by |
+|------|-------------|------------|
+| `execute_sql` | Run any SELECT query the AI agent constructs (read-only by default) | `IBMI_ENABLE_EXECUTE_SQL=true` in `.env` |
+| `describe_sql_object` | Get DDL/schema for any table, view, index, or procedure | Always enabled |
 
 > More tools are being developed and will be released incrementally. Contributions welcome!
 
@@ -82,6 +82,7 @@ IA_LIBRARY=SDK01
 | `DB2i_PASS` | Password for the user profile |
 | `DB2i_PORT` | Mapepire port (default: `8076`) |
 | `IA_LIBRARY` | Library where iA repository tables are stored (default: `SDK01`) |
+| `IBMI_ENABLE_EXECUTE_SQL` | Set to `true` to enable the built-in `execute_sql` tool (default: `false`) |
 
 > **Security**: `.env` is in `.gitignore` — your credentials are never committed.
 
@@ -91,7 +92,7 @@ Install and start the MCP server in a terminal:
 
 ```bash
 npm install -g @ibm/ibmi-mcp-server
-npx @ibm/ibmi-mcp-server --transport http --execute-sql --tools ./impact-analysis.yaml
+npx @ibm/ibmi-mcp-server --transport http --tools ./impact-analysis.yaml
 ```
 
 You should see output like:
@@ -103,7 +104,7 @@ IBM i MCP Server listening on http://localhost:3000
 
 > **Windows users**: If `npx` gives "Access is denied", use `node` directly:
 > ```bash
-> node %APPDATA%\npm\node_modules\@ibm\ibmi-mcp-server\dist\index.js --transport http --execute-sql --tools ./impact-analysis.yaml
+> node %APPDATA%\npm\node_modules\@ibm\ibmi-mcp-server\dist\index.js --transport http --tools ./impact-analysis.yaml
 > ```
 
 ### Step 4: Open in VS Code
@@ -174,7 +175,7 @@ export DB2i_PORT=8076
 export IA_LIBRARY=SDK01
 
 # Start in HTTP mode for manual testing
-npx @ibm/ibmi-mcp-server --transport http --execute-sql --tools ./impact-analysis.yaml
+npx @ibm/ibmi-mcp-server --transport http --tools ./impact-analysis.yaml
 # Server starts at http://localhost:3000
 ```
 
@@ -229,7 +230,7 @@ ia_tool_name:
 1. **Edit** `impact-analysis.yaml` — add or modify a tool definition
 2. **Restart the MCP server** — stop it in your terminal (`Ctrl+C`) and start again:
    ```bash
-   npx @ibm/ibmi-mcp-server --transport http --execute-sql --tools ./impact-analysis.yaml
+   npx @ibm/ibmi-mcp-server --transport http --tools ./impact-analysis.yaml
    ```
 3. **Test in Copilot Chat** — switch to Agent mode and ask a question that should trigger your tool
 4. **Verify** the SQL returns correct results and the response makes sense
@@ -313,7 +314,7 @@ These tools query the following iA repository tables (pre-parsed IBM i source me
 |-------|---------|
 | `IAALLREFPF` | Cross-reference: object-to-object relationships |
 | `IAPGMCALLS` | Call graph: CALL, CALLP, bound module references |
-| `IAFIDTL` | Field-level details for database files |
+| `IAFILEDTL` | Field-level details for database files |
 | `IAPGMVARS` | Program variables (standalone, DS subfields, indicators) |
 | `IAOBJMAP` | Object-to-source member mapping |
 | `QSYS2.SYSTABLES` | System catalog: file/table inventory per library |
@@ -324,7 +325,7 @@ These tools query the following iA repository tables (pre-parsed IBM i source me
 
 | Issue | Solution |
 |-------|----------|
-| `npx: Access is denied` (Windows) | Install globally: `npm install -g @ibm/ibmi-mcp-server`, then use `node %APPDATA%\npm\node_modules\@ibm\ibmi-mcp-server\dist\index.js --transport http --execute-sql --tools ./impact-analysis.yaml` |
+| `npx: Access is denied` (Windows) | Install globally: `npm install -g @ibm/ibmi-mcp-server`, then use `node %APPDATA%\npm\node_modules\@ibm\ibmi-mcp-server\dist\index.js --transport http --tools ./impact-analysis.yaml` |
 | MCP server not starting | Check Node.js version: `node --version` (must be 18+) |
 | Tools not showing in Copilot Chat | Make sure you're in **Agent** mode (not Ask or Edit mode). Click the tools icon to enable/disable specific tools |
 | Tools not connecting in VS Code | Ensure the MCP server is running in a separate terminal (`http://localhost:3000`) before opening VS Code |

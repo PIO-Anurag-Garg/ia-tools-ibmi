@@ -3,9 +3,9 @@
 # These tools query the iA repository tables (pre-parsed IBM i source metadata).
 #
 # IMPORTANT: The library is configured via the IA_LIBRARY environment variable.
-# Default iA library: SDK01 (set IA_LIBRARY in .env to override).
+# Default iA library: IADEMODEV (set IA_LIBRARY in .env to override).
 #
-# Tables queried: IAALLREFPF, IAPGMCALLS, IAFIDTL, IAPGMVARS, IAOBJMAP,
+# Tables queried: IAALLREFPF, IAPGMCALLS, IAFILEDTL, IAPGMVARS, IAOBJMAP,
 #   QSYS2.SYSTABLES
 
 sources:
@@ -120,7 +120,7 @@ tools:
       Analyze the blast radius of changing a specific field in a database file.
       Returns all programs that reference the file, cross-referenced with field-level usage.
       Critical before any field-level schema change (resize, rename, retype).
-      Combines IAALLREFPF (cross-references) with IAFIDTL (field details).
+      Combines IAALLREFPF (cross-references) with IAFILEDTL (field details).
     parameters:
       - name: file_name
         type: string
@@ -258,7 +258,7 @@ tools:
     source: ibmi
     description: >
       List all files and tables in the iA repository library.
-      Shows file name, type (TABLE, VIEW, etc.), creation date, row count,
+      Shows file name, type (TABLE, VIEW, etc.), last altered date,
       and text description. Use this to discover available files before
       querying their schema or data.
       Queries QSYS2.SYSTABLES for the library configured in IA_LIBRARY.
@@ -280,8 +280,7 @@ tools:
         TABLE_NAME AS file_name,
         TABLE_TYPE AS file_type,
         TABLE_TEXT AS description,
-        NUMBER_ROWS AS row_count,
-        CREATE_TIMESTAMP AS created
+        LAST_ALTERED_TIMESTAMP AS last_altered
       FROM QSYS2.SYSTABLES
       WHERE TABLE_SCHEMA = '${IA_LIBRARY}'
         AND (:file_type = '*ALL' OR TABLE_TYPE = :file_type)
