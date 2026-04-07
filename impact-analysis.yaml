@@ -1138,3 +1138,43 @@ tools:
       WHERE WHRFI = :file_name
       ORDER BY WHREFI
       FETCH FIRST :limit ROWS ONLY
+
+  # ── 28. Uncompiled Sources — sources without compiled objects ───────────
+  ia_uncompiled_sources:
+    name: ia-uncompiled-sources
+    source: ibmi
+    description: >
+      Find source members that have no corresponding compiled object.
+      Useful for identifying dormant code, abandoned development, or sources
+      that were never compiled. Complements ia_unused_objects (which finds
+      compiled objects not referenced). Queries MEMBERLIST_DETAILS and IAOBJMAP.
+    parameters:
+      - name: member_type
+        type: string
+        description: "Filter by source type (*ALL, RPGLE, SQLRPGLE, CLLE, etc.)"
+        required: false
+        default: "*ALL"
+      - name: limit
+        type: integer
+        description: "Max results (default: 500)"
+        required: false
+        default: 500
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        d.MEMBER_NAME,
+        d.MEMBER_TYPE,
+        d.SOURCE_FILE,
+        d.SOURCE_LIBRARY,
+        d.NUMBER_OF_RECORD AS LINE_COUNT,
+        d.MBR_CHANGED_CENTURY || d.MBR_CHANGED_DATE AS LAST_CHANGED,
+        d.MBR_DESCRIPTION
+      FROM ${IA_LIBRARY}.MEMBERLIST_DETAILS d
+      LEFT JOIN ${IA_LIBRARY}.IAOBJMAP m
+        ON d.MEMBER_NAME = m.MEMBER_NAME
+        AND d.MEMBER_TYPE = m.MEMBER_TYPE
+      WHERE m.MEMBER_NAME IS NULL
+        AND (:member_type = '*ALL' OR d.MEMBER_TYPE = :member_type)
+      ORDER BY d.MEMBER_TYPE, d.MEMBER_NAME
+      FETCH FIRST :limit ROWS ONLY

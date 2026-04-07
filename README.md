@@ -18,7 +18,7 @@ Use them with **VS Code GitHub Copilot**, **Claude Code**, or any MCP-compatible
 
 A token-efficient skill at `.claude/skills/ia/` that teaches AI agents how to query all 35+ iA tables. Invoke with `/ia` in any Claude Code session. The skill includes table schemas, SQL patterns, and query workflows in its `references/` folder.
 
-## Tools (30 custom + 2 built-in)
+## Tools (31 custom + 2 built-in)
 
 ### Custom iA Tools (defined in `impact-analysis.yaml`)
 
@@ -54,6 +54,7 @@ A token-efficient skill at `.claude/skills/ia/` that teaches AI agents how to qu
 | 28 | `ia_library_files` | List all files/tables in the iA library |
 | 29 | `ia_object_lookup` | Look up object type, library, and attribute by name |
 | 30 | `ia_file_dependencies` | Find LFs, indexes, and views dependent on a physical file |
+| 31 | `ia_uncompiled_sources` | Find source members without compiled objects (orphaned sources) |
 
 ### Built-in MCP Server Tools
 
