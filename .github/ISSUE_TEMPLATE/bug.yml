@@ -1,0 +1,92 @@
+name: Bug Report
+description: Report a tool that returns wrong data or errors
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: tool
+    attributes:
+      label: Tool Name
+      description: Which tool is affected?
+      options:
+        - ia_where_used
+        - ia_call_hierarchy
+        - ia_field_impact
+        - ia_program_variables
+        - ia_data_structures
+        - ia_call_parameters
+        - ia_subroutines
+        - ia_file_overrides
+        - ia_file_fields
+        - ia_object_list
+        - ia_program_info
+        - ia_program_summary
+        - ia_program_detail
+        - ia_source_code
+        - ia_rpg_source_tokens
+        - ia_cl_source_tokens
+        - ia_dashboard
+        - ia_repo_config
+        - ia_exception_log
+        - ia_dds_to_ddl_status
+        - ia_reference_count
+        - ia_unused_objects
+        - ia_circular_deps
+        - ia_where_used_detail
+        - ia_override_chain
+        - ia_object_lifecycle
+        - ia_code_complexity
+        - ia_library_files
+        - ia_object_lookup
+        - ia_file_dependencies
+        - execute_sql
+        - describe_sql_object
+        - Other (specify below)
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: "The tool should return all programs that reference CUSTFILE..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+      placeholder: "The tool returned an empty result / SQL error / wrong data..."
+    validations:
+      required: true
+
+  - type: input
+    id: ia_library
+    attributes:
+      label: iA Library
+      description: What is your IA_LIBRARY value?
+      placeholder: "SDK01"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce the issue?
+      placeholder: |
+        1. Set IA_LIBRARY=SDK01
+        2. Call ia_where_used with object_name='CUSTFILE'
+        3. See error...
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other details (error messages, screenshots, SQL output)
+    validations:
+      required: false

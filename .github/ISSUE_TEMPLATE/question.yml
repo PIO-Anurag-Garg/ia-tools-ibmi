@@ -1,0 +1,42 @@
+name: Question
+description: Ask about setup, usage, or iA tables
+labels: ["question"]
+body:
+  - type: dropdown
+    id: topic
+    attributes:
+      label: Topic
+      description: What area is your question about?
+      options:
+        - Setup / Installation
+        - Tool usage
+        - iA tables / data
+        - VS Code / Copilot integration
+        - Claude Code integration
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What do you need help with?
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you tried?
+      description: Any steps you've already taken or docs you've read
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Environment Details
+      description: OS, Node version, VS Code version, etc. (if relevant)
+    validations:
+      required: false

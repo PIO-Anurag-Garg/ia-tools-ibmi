@@ -1,0 +1,59 @@
+name: New Tool Request
+description: Suggest a new ia_* tool
+labels: ["new-tool"]
+body:
+  - type: input
+    id: tool_name
+    attributes:
+      label: Suggested Tool Name
+      description: Follow the ia_snake_case convention
+      placeholder: "ia_field_references"
+    validations:
+      required: true
+
+  - type: textarea
+    id: purpose
+    attributes:
+      label: Purpose
+      description: What question should this tool answer?
+      placeholder: "Find all programs that read or write a specific field in a file..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: input_output
+    attributes:
+      label: Input / Output
+      description: What parameters should it accept? What should it return?
+      placeholder: |
+        Input: file_name, field_name, limit
+        Output: program name, usage type (read/write), line number
+    validations:
+      required: true
+
+  - type: input
+    id: ia_tables
+    attributes:
+      label: iA Table(s)
+      description: Which iA repository table(s) would this query?
+      placeholder: "IAALLREFPF, IAPGMREF"
+    validations:
+      required: false
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Example Use Case
+      description: Describe a real scenario where you'd use this tool
+      placeholder: "Before changing CUSTNO from 6 to 10 digits, I need to find every program that touches this field..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: sql_draft
+    attributes:
+      label: SQL Draft (optional)
+      description: If you have a working SQL query, paste it here
+      render: sql
+    validations:
+      required: false
