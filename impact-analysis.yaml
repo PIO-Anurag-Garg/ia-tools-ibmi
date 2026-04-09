@@ -1449,3 +1449,54 @@ tools:
       WHERE MEMBER_NAME = :member_name
       ORDER BY SOURCE_RRN, DOCUMENT_SEQ
       FETCH FIRST :limit ROWS ONLY
+
+  # ── Variable Operations — assignments, declarations, BIFs ───────────────
+  ia_variable_ops:
+    name: ia-variable-ops
+    source: ibmi
+    description: >
+      Find all operations involving a variable — declarations (DCL-DS, DCLVAR),
+      assignments (EVAL), comparisons, and BIF usage. Useful for tracing data
+      flow and understanding how a variable is used throughout a program.
+      Queries IAVARREL.
+    parameters:
+      - name: member_name
+        type: string
+        description: "Source member name"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: variable_name
+        type: string
+        description: "Variable name to search for, or *ALL for all variables"
+        required: false
+        default: "*ALL"
+      - name: opcode
+        type: string
+        description: "Filter by opcode: *ALL, DCL-DS, DCLVAR, EVAL, etc. (default: *ALL)"
+        required: false
+        default: "*ALL"
+      - name: limit
+        type: integer
+        description: "Max results (default: 500)"
+        required: false
+        default: 500
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        MEMBER_NAME,
+        OPCODE_NAME AS opcode,
+        FACTOR1_VAL AS factor1,
+        FACTOR2_VAL AS factor2,
+        RESULT_VAL AS result,
+        BIF AS builtin_function
+      FROM ${IA_LIBRARY}.IAVARREL
+      WHERE MEMBER_NAME = :member_name
+        AND (:variable_name = '*ALL'
+             OR FACTOR1_VAL = :variable_name
+             OR FACTOR2_VAL = :variable_name
+             OR RESULT_VAL = :variable_name)
+        AND (:opcode = '*ALL' OR OPCODE_NAME = :opcode)
+      ORDER BY MEMBER_NAME
+      FETCH FIRST :limit ROWS ONLY
