@@ -1321,3 +1321,49 @@ tools:
         AND :direction IN ('CALLEES', 'BOTH')
       ORDER BY direction, caller_object
       FETCH FIRST :limit ROWS ONLY
+
+  # ── CL Job Submissions — batch job and scheduler detection ──────────────
+  ia_cl_jobs:
+    name: ia-cl-jobs
+    source: ibmi
+    description: >
+      Find SBMJOB and CALL commands in CL programs, including job queue,
+      job description, and hold status. Critical for understanding batch
+      job scheduling — programs invoked via SBMJOB may appear "unused" in
+      simple cross-reference queries but are actually scheduler-invoked.
+      Queries IAVARCAL.
+    parameters:
+      - name: member_name
+        type: string
+        description: "CL member name, or *ALL for all members"
+        required: false
+        default: "*ALL"
+      - name: call_type
+        type: string
+        description: "Filter by type: *ALL, SBMJOB, DIRECT (default: *ALL)"
+        required: false
+        default: "*ALL"
+      - name: limit
+        type: integer
+        description: "Max results (default: 500)"
+        required: false
+        default: 500
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        IVCAL_MBR AS cl_member,
+        IVCAL_FILE AS source_file,
+        IVCAL_LIB AS library,
+        IVCAL_TYP AS call_type,
+        IVCAL_PGM AS called_program,
+        IVCAL_VARM AS variable_call,
+        IVCAL_JOB AS job_name,
+        IVCAL_JOBD AS job_description,
+        IVCAL_JOBQ AS job_queue,
+        IVCAL_HOLD AS hold_flag
+      FROM ${IA_LIBRARY}.IAVARCAL
+      WHERE (:member_name = '*ALL' OR IVCAL_MBR = :member_name)
+        AND (:call_type = '*ALL' OR IVCAL_TYP = :call_type)
+      ORDER BY IVCAL_MBR, IVCAL_TYP
+      FETCH FIRST :limit ROWS ONLY
