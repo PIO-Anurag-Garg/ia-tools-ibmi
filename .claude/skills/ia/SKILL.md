@@ -22,7 +22,8 @@ Most iA questions can be answered with a single well-chosen tool. Before calling
 | "LFs/views over file X?" | `ia_file_dependencies` | All dependent logical files, indexes, views |
 | "Tell me about program X" | `ia_program_detail` (section=*ALL) | Calls, files, subs, vars, overrides — ALL in one query |
 | "Call tree for X?" | `ia_call_hierarchy` | Callers + callees |
-| "Dead code?" | `ia_unused_objects` | Zero-reference objects |
+| "Dead code?" | `ia_unused_objects` | Zero-reference compiled objects |
+| "Orphaned sources?" | `ia_uncompiled_sources` | Sources without compiled objects |
 | "Complexity hotspots?" | `ia_code_complexity` (member=*ALL) | All programs ranked by complexity |
 | "Find object named X?" | `ia_object_lookup` | Type/library/attr (supports % wildcards) |
 | "Repository overview?" | `ia_dashboard` | Full inventory stats |
@@ -98,7 +99,8 @@ Most iA questions can be answered with a single well-chosen tool. Before calling
 |------|---------|
 | `ia_object_lifecycle` | Creation/change/last-used dates, days-used count |
 | `ia_code_complexity` | IF/DO/SQL/GOTO/PROC counts, executable lines, call stats |
-| `ia_unused_objects` | Dead code candidates (never referenced) |
+| `ia_unused_objects` | Dead code candidates (compiled but never referenced) |
+| `ia_uncompiled_sources` | Orphaned sources (never compiled into objects) |
 | `ia_dds_to_ddl_status` | DDS→DDL modernization tracking |
 | `ia_exception_log` | iA parser errors per member |
 
@@ -126,7 +128,8 @@ Most iA questions can be answered with a single well-chosen tool. Before calling
 | Inventory of objects by type? | `ia_object_list` | — |
 | Program metadata / compile info? | `ia_program_info` | [#14](references/sql-patterns.md) |
 | Lifecycle / last-used dates? | `ia_object_lifecycle` | — |
-| Dead code candidates? | `ia_unused_objects` | [#15](references/sql-patterns.md) |
+| Dead code (compiled)? | `ia_unused_objects` | [#15](references/sql-patterns.md) |
+| Dead code (sources)? | `ia_uncompiled_sources` | — |
 | Complexity hotspots? | `ia_code_complexity` | — |
 | Circular call chains? | `ia_circular_deps` | — |
 | Repo health / member inventory? | `ia_dashboard` | — |

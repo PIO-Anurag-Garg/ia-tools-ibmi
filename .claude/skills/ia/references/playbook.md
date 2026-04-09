@@ -66,7 +66,8 @@ Call `ia_program_variables` → Group: standalone fields, DS subfields (likely D
 `execute_sql` on IADSPDBR (SQL#8) → Interpret WHTYPE: D=data, I=access path, V=SQL VIEW, C=constraint → Chain `ia_where_used` on each logical file to find programs referencing them.
 
 ### P8: "Find dead code"
-`ia_unused_objects` for objects with zero refs → `ia_object_lifecycle` to confirm last-used date → `ia_dashboard` to cross-check category → Always flag members that may be scheduler-invoked.
+**Compiled objects:** `ia_unused_objects` for objects with zero refs → `ia_object_lifecycle` to confirm last-used date → `ia_dashboard` to cross-check category → Always flag members that may be scheduler-invoked.
+**Orphaned sources:** `ia_uncompiled_sources` for source members never compiled into objects → Check LAST_CHANGED date to identify abandoned development.
 
 ### P9: "Where does this program actually write?"
 `ia_file_overrides` for the member → If overrides exist, also run `ia_override_chain` → Combine with `ia_where_used` on each resolved target file to confirm downstream impact.
@@ -114,6 +115,7 @@ Call `ia_program_variables` → Group: standalone fields, DS subfields (likely D
    - `ia_call_hierarchy` — call tree for X?
    - `ia_program_detail` — tell me about program X?
    - `ia_code_complexity` — complexity hotspots?
-   - `ia_unused_objects` — dead code?
+   - `ia_unused_objects` — dead compiled objects?
+   - `ia_uncompiled_sources` — orphaned sources?
    - `ia_object_lookup` — find object named X?
    - `ia_dashboard` — repository overview?

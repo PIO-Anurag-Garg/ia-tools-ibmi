@@ -41,8 +41,9 @@ Returns: All programs affected, their usage type (READ/WRITE/UPDATE), and object
 
 **Efficient approach:**
 ```
-1. ia_unused_objects(object_type="*PGM", limit=100) → Zero-reference objects
-2. ia_code_complexity(member_name="*ALL", limit=50) → Also shows CALLED_BY_COUNT (0 = dead)
+1. ia_unused_objects(object_type="*PGM", limit=100) → Zero-reference compiled objects
+2. ia_uncompiled_sources(member_type="RPGLE", limit=100) → Orphaned sources never compiled
+3. ia_code_complexity(member_name="*ALL", limit=50) → Also shows CALLED_BY_COUNT (0 = dead)
 ```
 
 **No need to chain** `ia_object_lifecycle` for every object — the unused_objects query already confirms zero references. Only check lifecycle for specific objects the user wants to investigate.
@@ -220,7 +221,9 @@ User Question
     ├─► "Tell me about program X" ► ia_program_detail section=*ALL (single call)
     │                               └─► Covers: calls, files, subroutines, vars, overrides
     │
-    ├─► "Dead code?" ────────────► ia_unused_objects (single call)
+    ├─► "Dead code (compiled)?" ─► ia_unused_objects (single call)
+    │
+    ├─► "Orphaned sources?" ─────► ia_uncompiled_sources (single call)
     │
     ├─► "Complexity hotspots?" ──► ia_code_complexity member_name=*ALL (single call)
     │
