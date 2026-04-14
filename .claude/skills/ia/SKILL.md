@@ -29,6 +29,7 @@ Most iA questions can be answered with a single well-chosen tool. Before calling
 | "Does member X exist?" | `ia_member_lookup` | Source file, library, type, timestamps |
 | "Repository overview?" | `ia_dashboard` | Full inventory stats |
 | "Copybook impact?" | `ia_copybook_impact` | Programs including the copybook |
+| "What copybooks does X use?" | `ia_member_copybooks` | Copybooks included by a member |
 | "SRVPGM exports?" | `ia_srvpgm_exports` | Exported/imported procedures |
 | "Procedure callers?" | `ia_procedure_xref` | Procedure-level call graph |
 | "Batch jobs?" | `ia_cl_jobs` | SBMJOB calls in CL programs |
@@ -181,6 +182,7 @@ FETCH FIRST 10000 ROWS ONLY
 | Tool | Purpose |
 |------|---------|
 | `ia_copybook_impact` | Programs including a copybook via /COPY |
+| `ia_member_copybooks` | Copybooks used by a source member |
 | `ia_srvpgm_exports` | Service program exported/imported procedures |
 | `ia_procedure_xref` | Procedure-level cross-reference |
 | `ia_procedure_params` | Procedure PR/PI signatures |
@@ -233,6 +235,7 @@ FETCH FIRST 10000 ROWS ONLY
 | CL/DDS source code for member X? | `execute_sql` on IAQCLSRC / IAQDDSSRC | [#16, #17](references/sql-patterns.md) |
 | Logical files over physical file X? | `ia_file_dependencies` | — |
 | Copybook change impact? | `ia_copybook_impact` | — |
+| Copybooks used by member X? | `ia_member_copybooks` | — |
 | SRVPGM exports/imports? | `ia_srvpgm_exports` | [#12](references/sql-patterns.md) |
 | Procedure-level callers? | `ia_procedure_xref` | — |
 | Procedure signature? | `ia_procedure_params` | — |

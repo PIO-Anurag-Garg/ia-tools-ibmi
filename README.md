@@ -61,6 +61,7 @@ A token-efficient skill at `.claude/skills/ia/` that teaches AI agents how to qu
 | # | Tool | Description |
 |---|------|-------------|
 | 31 | `ia_copybook_impact` | Find programs including a copybook via /COPY |
+| 46 | `ia_member_copybooks` | List copybooks used by a source member |
 | 32 | `ia_srvpgm_exports` | List service program exported/imported procedures |
 | 33 | `ia_procedure_xref` | Procedure-level cross-reference (callers/callees) |
 | 34 | `ia_procedure_params` | Get procedure PR/PI parameter signatures |
