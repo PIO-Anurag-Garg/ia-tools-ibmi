@@ -1799,3 +1799,48 @@ tools:
         AND (:member_type = '*ALL' OR MEMBER_TYPE = :member_type)
       ORDER BY MEMBER_NAME, SOURCE_LIBRARY, SOURCE_FILE
       FETCH FIRST :limit ROWS ONLY
+
+  # ── 45. Object References — what an object references/contains ────────────
+  ia_object_references:
+    name: ia-object-references
+    source: ibmi
+    maxDisplayRows: 1000
+    description: >
+      Find all objects that a given object references, uses, or contains.
+      Inverse of ia_where_used: shows what an object depends ON rather than
+      what depends on IT. Use cases: modules bound into *PGM/*SRVPGM,
+      service programs in a *BNDDIR, files used by a program, etc.
+      Queries the iA IAALLREFPF cross-reference table.
+    parameters:
+      - name: object_name
+        type: string
+        description: "Object name to find references FROM (e.g., IABNDDIR, MYPGM)"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: referenced_type
+        type: string
+        description: "Filter referenced objects by type: *ALL, *MODULE, *SRVPGM, *FILE, *PGM, *BNDDIR, *DTAARA (default: *ALL)"
+        required: false
+        default: "*ALL"
+      - name: limit
+        type: integer
+        description: "Max results (default: 200)"
+        required: false
+        default: 200
+        min: 1
+        max: 5000
+    statement: |
+      SELECT DISTINCT
+        OBJECT_NAME AS source_object,
+        OBJECT_TYPE AS source_type,
+        OBJECT_ATTR AS source_attr,
+        REFERENCED_OBJ AS referenced_object,
+        REFERENCED_OBJTYP AS referenced_type,
+        REFERENCED_OBJLIB AS referenced_library,
+        MAPED_FROM AS reference_source
+      FROM ${IA_LIBRARY}.IAALLREFPF
+      WHERE OBJECT_NAME = :object_name
+        AND (:referenced_type = '*ALL' OR REFERENCED_OBJTYP = :referenced_type)
+      ORDER BY REFERENCED_OBJTYP, REFERENCED_OBJ
+      FETCH FIRST :limit ROWS ONLY
