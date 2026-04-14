@@ -1,8 +1,13 @@
-# iA SQL Patterns for execute_sql (fallback only)
+# iA SQL Patterns for execute_sql
 
-**Prefer dedicated `ia_*` tools** (see [SKILL.md](../SKILL.md)). These SQL templates are the fallback for cases where no dedicated tool fits. Each pattern below notes the dedicated tool that supersedes it (if any).
+**When to use these patterns:**
+- **>100 rows expected** — Use `execute_sql` with these patterns instead of dedicated tools
+- **Dedicated tool truncates** — If you hit a tool's limit, switch to `execute_sql` with the pattern below
+- **No dedicated tool exists** — For queries not covered by `ia_*` tools
 
-All queries use `${IA_LIBRARY}` as the schema. Replace `<PARAM>` placeholders with actual values.
+**How to use:** Copy the SQL, replace `${IA_LIBRARY}` with `IADEMODEV`, replace `<PARAM>` placeholders with actual values, adjust `FETCH FIRST N ROWS ONLY` as needed.
+
+**Getting correct columns:** If a pattern below doesn't exist for your use case, check the dedicated tool's SQL in `impact-analysis.yaml` and adapt it for `execute_sql`.
 
 ---
 
@@ -189,12 +194,45 @@ FETCH FIRST 200 ROWS ONLY
 ## Source & Documentation
 
 ### #16 RPG Source Text
+**→ Prefer #18 (combined source + complexity) for full source retrieval**
 ```sql
 SELECT SOURCE_RRN, SOURCE_DATA
 FROM ${IA_LIBRARY}.IAQRPGSRC
 WHERE MEMBER_NAME = '<MEMBER_NAME>'
 ORDER BY LIBRARY_NAME, SOURCE_RRN
 FETCH FIRST 500 ROWS ONLY
+```
+
+### #18 Combined RPG Source + Complexity (PREFERRED for full source retrieval)
+
+**Use this instead of calling `ia_rpg_source` + `ia_code_complexity` separately.**
+
+```sql
+SELECT R.LIBRARY_NAME, R.SOURCEPF_NAME, R.MEMBER_NAME, R.MEMBER_TYPE,
+  R.SOURCE_RRN, R.SOURCE_SEQ, R.SOURCE_SPEC, R.SRCLIN_TYPE, R.SOURCE_DATA,
+  C.TOTAL_LINES, C.EXEC_LINES, C.IF_COUNT, C.DO_COUNT, C.FOR_COUNT,
+  C.SEL_COUNT, C.SBR_COUNT, C.PROC_COUNT, C.SQL_COUNT, C.GOTO_COUNT,
+  C.FILE_COUNT, C.DEVF_COUNT, C.CALL_PGM_COUNT, C.CALLED_BY_PGM
+FROM ${IA_LIBRARY}.IAQRPGSRC R
+LEFT JOIN ${IA_LIBRARY}.IA_CODE_INFO C ON C.MEMBER_NAME = R.MEMBER_NAME
+WHERE R.MEMBER_NAME = '<MEMBER_NAME>'
+ORDER BY R.LIBRARY_NAME, R.SOURCE_RRN
+FETCH FIRST 10000 ROWS ONLY
+```
+
+**Why this is better:**
+- Gets source code AND complexity metrics in ONE query
+- Higher limit (10000) avoids pagination for most programs
+- No need for separate `ia_code_complexity` call to get TOTAL_LINES
+
+**For spec-type filtering:**
+```sql
+SELECT R.SOURCE_RRN, R.SOURCE_SPEC, R.SOURCE_DATA
+FROM ${IA_LIBRARY}.IAQRPGSRC R
+WHERE R.MEMBER_NAME = '<MEMBER_NAME>'
+  AND R.SOURCE_SPEC = 'P'  -- P=procedures, D=definitions, F=files, C=calc
+ORDER BY R.LIBRARY_NAME, R.SOURCE_RRN
+FETCH FIRST 5000 ROWS ONLY
 ```
 
 ### #17 CL Source Text
@@ -206,7 +244,7 @@ ORDER BY LIBRARY_NAME, SOURCE_RRN
 FETCH FIRST 500 ROWS ONLY
 ```
 
-### #18 Pseudocode Summary
+### #19 Pseudocode Summary
 ```sql
 SELECT SOURCE_RRN, DOCUMENT_SEQ, GENERATED_PSEUDOCODE
 FROM ${IA_LIBRARY}.GENERATED_PSEUDOCODE_DETAILS

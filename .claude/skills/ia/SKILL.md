@@ -34,6 +34,59 @@ Most iA questions can be answered with a single well-chosen tool. Before calling
 | "Batch jobs?" | `ia_cl_jobs` | SBMJOB calls in CL programs |
 | "Procedure signature?" | `ia_procedure_params` | PR/PI parameter definitions |
 
+### Source Code Retrieval Workflow
+
+When users ask for **complete source code** (e.g., "show business rules of ADMINP", "source for ORDENTRY", "what does member ABC do"):
+
+**For program/object queries (2 calls max):**
+1. `ia_object_lookup` → Get source member name, srcpf, library, type (metadata validation)
+2. `execute_sql` → Fetch source + complexity using this exact verified SQL (copy as-is, substitute member name):
+
+```sql
+SELECT R.SOURCE_SEQ, R.SOURCE_SPEC, R.SRCLIN_TYPE, R.SOURCE_DATA,
+       C.TOTAL_LINES, C.EXEC_LINES, C.IF_COUNT, C.DO_COUNT,
+       C.SQL_COUNT, C.PROC_COUNT, C.GOTO_COUNT, C.CALL_PGM_COUNT
+FROM IADEMODEV.IAQRPGSRC R
+LEFT JOIN IADEMODEV.IA_CODE_INFO C ON C.MEMBER_NAME = R.MEMBER_NAME
+WHERE R.MEMBER_NAME = '<MEMBER_NAME>'
+ORDER BY R.SOURCE_SEQ
+FETCH FIRST 10000 ROWS ONLY
+```
+
+**Verified IAQRPGSRC columns** (do not invent alternatives):
+`MEMBER_NAME`, `SOURCE_SEQ`, `SOURCE_SPEC`, `SRCLIN_TYPE`, `SOURCE_DATA`,
+`LIBRARY_NAME`, `SOURCEPF_NAME`, `SOURCE_RRN`, `SOURCE_DATE`, `SRCLIN_CNTN`
+
+**For member queries (2 calls max):**
+1. `ia_member_lookup` → Check if member exists, get metadata
+2. `execute_sql` → Use the same SQL above
+
+**Why `execute_sql` instead of `ia_rpg_source`:**
+- Gets source code AND complexity metrics in a single query
+- Higher limit (10000) avoids pagination for most programs
+- No need for separate `ia_code_complexity` call to get line count
+- For a 3314-line program, this saves 3+ tool calls vs the old approach
+
+**Multiple members rule:** If lookup returns multiple members:
+- Show **first member only** with source and complexity
+- List other matches briefly (library/srcpf/type)
+- Ask follow-up: "Found N members. Showing X. Want to see source for others?"
+
+**Never:** Retrieve source for all members in parallel — this wastes context and tool calls.
+
+### Handling Large Results / Truncation
+
+**For source code:** Use SQL pattern #18 with `FETCH FIRST 10000 ROWS ONLY` — this covers 99% of programs. Only paginate if source exceeds 10000 lines.
+
+**Spec-type filtering (when user wants specific sections):**
+- "Show me the procedures" → Use SQL with `SOURCE_SPEC = 'P'`
+- "Show file declarations" → Use SQL with `SOURCE_SPEC = 'F'`
+- "Show data definitions" → Use SQL with `SOURCE_SPEC = 'D'`
+
+**For other tools (ia_where_used, ia_field_impact, etc.):**
+- If results hit the limit, tell user: "Showing first N results. There may be more — increase limit?"
+- **If you anticipate >100 rows upfront:** Skip the dedicated tool. Use `execute_sql` directly with the SQL pattern from [references/sql-patterns.md](references/sql-patterns.md). This avoids truncation surprises.
+
 ### When to Chain (and When NOT to)
 
 **DO chain** when you see `*SRVPGM` in results — service programs are amplifiers; check what binds to them.
@@ -50,7 +103,17 @@ Most iA questions can be answered with a single well-chosen tool. Before calling
 
 ## Tool Preference Rule
 
-**Prefer dedicated `ia_*` MCP tools over `execute_sql`.** The repo ships 38 purpose-built tools that are parameter-validated, bounded, and tested. **Must only fall back** to `execute_sql` when no dedicated tool fits (then consult [references/sql-patterns.md](references/sql-patterns.md)).
+**For queries ≤100 rows:** Prefer dedicated `ia_*` MCP tools — they're parameter-validated, bounded, and tested.
+
+**For queries >100 rows:** **Use `execute_sql` directly.** Many dedicated tools cap at 100-200 rows. When you need bulk data (inventories, full program lists, large source files >100 lines), skip the dedicated tool.
+
+**How to get the SQL:**
+1. Check [references/sql-patterns.md](references/sql-patterns.md) for ready-to-use templates
+2. If no pattern exists, read the tool's SQL from `impact-analysis.yaml` and adapt it
+
+**Example:** Need 3000-line source? Don't paginate `ia_rpg_source` 6 times. Use sql-patterns.md #18 or copy `ia_rpg_source` SQL from yaml, change limit to 5000, run with `execute_sql` — one call.
+
+**Why:** Dedicated tools truncate silently. `execute_sql` with correct SQL gives you full control.
 
 ## Dedicated Tools (44)
 
@@ -127,15 +190,17 @@ Most iA questions can be answered with a single well-chosen tool. Before calling
 | `ia_sql_names` | SQL long/short name mapping |
 | `ia_program_files` | Program file usage with PREFIX/RENAME |
 
-### Fallback
+### General-Purpose (prefer for >100 rows)
 | Tool | Purpose |
 |------|---------|
-| `execute_sql` | Raw SELECT for anything none of the above covers |
+| `execute_sql` | **Use for bulk queries (>100 rows)** or when no dedicated tool fits. Consult [sql-patterns.md](references/sql-patterns.md) |
 | `describe_sql_object` | DDL/column details for a table, view, index, or procedure |
 
 ## Start Here — Decision Tree
 
-| User Intent | Preferred Tool | Fallback SQL Pattern |
+**Important:** Tools below are for queries expecting ≤100 rows. For bulk queries (inventories, full lists, broad searches expecting >100 rows), skip to `execute_sql` with patterns from [sql-patterns.md](references/sql-patterns.md).
+
+| User Intent | Tool (≤100 rows) | SQL Pattern (>100 rows) |
 |-------------|----------------|----------------------|
 | What references object X? | `ia_where_used` | [#1](references/sql-patterns.md) |
 | How many refs to X? | `ia_reference_count` | — |
@@ -160,6 +225,8 @@ Most iA questions can be answered with a single well-chosen tool. Before calling
 | List tables in iA library? | `ia_library_files` | [#7](references/sql-patterns.md) |
 | Raw RPG/CL token stream? | `ia_rpg_source_tokens`, `ia_cl_source_tokens` | — |
 | RPG source code for member X? | `ia_rpg_source` (optional `source_spec` filter) | — |
+| **Source for program X? (business rules)** | `ia_object_lookup` → `execute_sql` (SQL #18) | 2 calls |
+| **Source for member name?** | `ia_member_lookup` → `execute_sql` (SQL #18) | 2 calls |
 | Search RPG source for keyword? | `ia_rpg_source_search` | — |
 | Modernization / format stats? | `ia_rpg_source_stats` (member or portfolio) | — |
 | CL/DDS source code for member X? | `execute_sql` on IAQCLSRC / IAQDDSSRC | [#16, #17](references/sql-patterns.md) |
@@ -176,16 +243,21 @@ Most iA questions can be answered with a single well-chosen tool. Before calling
 - Object/member names are **10-char uppercase** — pass `'CUSTMAST'`, not `'custmast'`
 - `object_type` parameters use star-prefixed form: `*PGM`, `*SRVPGM`, `*FILE`, `*DSPF`, `*CMD`, `*MODULE`, `*DTAARA`
 - Wildcard `*ALL` means "no filter" — use it as the default for optional type filters
-- All tools cap results with `limit` (default 200–500) — bump it explicitly if you hit the cap
+- Dedicated tools cap results with `limit` (default 100–500) — **if you need >100 rows, use `execute_sql` instead**
 - `ia_object_lookup` is the only tool supporting `%` wildcards in the name
 
-## SQL Rules (for `execute_sql` fallback)
+## SQL Rules (for `execute_sql`)
 
 - Always qualify tables: `IADEMODEV.TABLE_NAME`
 - Always limit results: `FETCH FIRST N ROWS ONLY`
 - **SELECT only** — never INSERT/UPDATE/DELETE
 - Object names are **10-char uppercase**
-- **Always must run** `describe_sql_object` first if unsure of column names — never guess
+- **MANDATORY — no column name invention, ever:** Before writing any `execute_sql` query, you MUST use one of these three sources for column names — in order of preference:
+  1. The inline verified SQL templates in this skill (e.g., IAQRPGSRC columns above)
+  2. A pattern from [sql-patterns.md](references/sql-patterns.md) — read the file, do not recall from memory
+  3. `describe_sql_object` on the target table — run it first, then write the query
+  
+  **Writing column names from memory is never acceptable.** If you are unsure, run `describe_sql_object`.
 
 ## Interpreting Results
 

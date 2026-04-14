@@ -2,6 +2,8 @@
 
 This reference documents optimal tool sequences for common queries. Follow these flows to minimize tool calls while maximizing insight.
 
+**Important:** Tools below are designed for queries expecting ≤100 rows. For bulk queries (inventories, full program lists, broad searches expecting >100 rows), use `execute_sql` directly with patterns from [sql-patterns.md](sql-patterns.md) to avoid truncation.
+
 ---
 
 ## Tier 1: High-Impact Analysis (Most Valuable)
@@ -233,7 +235,48 @@ Returns: SQL long names ↔ 10-char system names mapping.
 
 ## Tier 5: Source Code Analysis
 
-### QF-23: "Deep token-level analysis"
+### QF-23: "Read source code for a program/object" (e.g., "show me ADMINP source", "business rules of ORDENTRY")
+
+**Two-step approach:**
+```
+1. ia_object_lookup(object_name="ADMINP") → Get source member, source file, library, type
+2. execute_sql → Source + complexity in ONE query (SQL pattern #18)
+```
+
+**Why object_lookup first:** Programs may have different source member names than object names. Object lookup returns the actual source file (SRCFILE), member name (SRCMBR), and library needed for the source query.
+
+**Why execute_sql instead of ia_rpg_source + ia_code_complexity:**
+- Gets source code AND complexity metrics in a single query
+- Higher limit (10000) avoids pagination for 99% of programs
+- Saves 1-2 tool calls vs the old 3-step approach
+
+**Spec-type filtering (when user wants specific sections):**
+```
+execute_sql → SQL with SOURCE_SPEC filter (P=procedures, D=definitions, F=files, C=calc)
+```
+
+**Present results:** Show source code with complexity metrics (IF/DO/SQL counts, executable lines).
+
+---
+
+### QF-24: "Read source for a member name" (e.g., "show ABC member", "what does CUSTPROC do")
+
+**Two-step approach:**
+```
+1. ia_member_lookup(member_name="ABC") → Get source file, library, type, timestamps
+2. execute_sql → Source + complexity in ONE query (SQL pattern #18)
+```
+
+**Multiple members:** If `ia_member_lookup` returns multiple matches:
+- Present details for the **first member only** with its source and complexity
+- List the other member names briefly (library/srcpf/type)
+- Ask: "Found N members matching 'ABC'. Showing ABC in SRCLIB/QRPGLESRC. Would you like to see source for any of the others?"
+
+**Never:** Call execute_sql or ia_rpg_source multiple times in parallel for all members — this wastes context and tool calls.
+
+---
+
+### QF-25: "Deep token-level analysis"
 
 **For RPG:**
 ```
@@ -249,7 +292,7 @@ Returns: SQL long names ↔ 10-char system names mapping.
 
 ---
 
-### QF-24: "Find all uses of a specific variable/field name"
+### QF-26: "Find all uses of a specific variable/field name"
 
 **Single query:**
 ```
@@ -262,7 +305,7 @@ ia_field_impact(field_name="ORDAMT", file_name="*ALL", limit=500)
 
 ## Tier 6: Discovery & Inventory
 
-### QF-25: "What objects exist matching a pattern?"
+### QF-27: "What objects exist matching a pattern?"
 
 **Single query:**
 ```
@@ -273,7 +316,7 @@ Supports `%` wildcards. Returns type, library, attribute for all matches.
 
 ---
 
-### QF-26: "List all service programs and their callers"
+### QF-28: "List all service programs and their callers"
 
 **Two-query approach:**
 ```
@@ -329,6 +372,7 @@ User Question
 | `ia_program_summary` + `ia_program_variables` + `ia_subroutines` | Three queries for one program | Use `ia_program_detail section=*ALL` |
 | `ia_object_lifecycle` for every unused object | Unnecessary — unused_objects already confirms zero refs | Only check lifecycle for specific objects |
 | Chaining to `ia_call_hierarchy` for every *PGM result | Overkill — most programs don't need deep analysis | Only chain for *SRVPGM or critical programs |
+| `ia_rpg_source` + `ia_code_complexity` + pagination for source | 3+ calls for one program | Use `execute_sql` with SQL #18 (2 calls total) |
 
 ---
 

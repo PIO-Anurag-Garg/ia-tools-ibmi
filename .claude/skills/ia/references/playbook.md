@@ -2,7 +2,9 @@
 
 **Efficiency goal:** Answer most questions in 1-2 tool calls. See [query-flows.md](query-flows.md) for optimal sequences.
 
-**Tool preference:** Use dedicated `ia_*` tools as the first choice. Only drop down to `execute_sql` when no dedicated tool fits.
+**Tool preference:** For queries ≤100 rows, use dedicated `ia_*` tools. **For queries >100 rows, use `execute_sql` directly** — dedicated tools silently truncate.
+
+**Getting SQL:** Use [sql-patterns.md](sql-patterns.md) templates. If no pattern exists, read the tool's SQL from `impact-analysis.yaml` and adapt it.
 
 ## IBM i Object Types
 
@@ -32,7 +34,7 @@
 | High-risk program to refactor | `ia_code_complexity` | Get IF/DO/SQL/GOTO counts and line totals |
 | Circular call suspicion | `ia_circular_deps` | Detect two-way call pairs |
 | Cleanup candidates | `ia_unused_objects` | Objects with zero references |
-| Results hit the limit | Re-run with higher `limit` | There may be more dependencies |
+| Results hit the limit | **Use `execute_sql`** with [sql-patterns.md](sql-patterns.md) | Avoid truncation |
 
 ## Chaining Rules
 
@@ -41,6 +43,15 @@
 3. **Service programs are amplifiers.** Any `*SRVPGM` in results — offer to check what depends on it.
 4. **Don't run everything at once.** Run 1-2 queries, interpret, then decide next step based on results.
 5. **Respect the limit.** If results are truncated, tell the user and offer to increase it.
+6. **Source code: use execute_sql.** For source retrieval, use `execute_sql` with SQL #18 — it returns source + complexity in one query with 10000-row limit. Reserve `ia_object_lookup`/`ia_member_lookup` for metadata validation only.
+
+## Pagination Strategy
+
+**For source code:** Use `execute_sql` with SQL pattern #18 (limit 10000) — this covers 99% of programs without pagination. Only paginate if source exceeds 10000 lines.
+
+**For other tools:** When result count equals the limit, data is likely truncated. Offer to increase limit or switch to `execute_sql`.
+
+**Pro tip:** Use spec-type filtering to reduce data: add `SOURCE_SPEC = 'P'` for procedures only, `SOURCE_SPEC = 'D'` for definitions.
 
 ## Playbooks
 
@@ -112,7 +123,7 @@ Call `ia_program_variables` → Group: standalone fields, DS subfields (likely D
 | Null `field_usage` | "N programs have unknown field usage — inspect variables with SQL#5?" |
 | Program with >5 callers | "X has N callers — critical junction. Check what files it references?" |
 | Program with 0 callers | "X has no callers in repository — may be invoked by scheduler or external system." |
-| Results hit limit | "Capped at N rows — increase limit?" |
+| Results hit limit | "Capped at N rows — switching to execute_sql for full results." |
 | Zero results | "No results — verify uppercase spelling. If correct, check schedulers/external systems." |
 
 ## Response Rules
