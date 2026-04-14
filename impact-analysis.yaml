@@ -1850,3 +1850,48 @@ tools:
         AND (:referenced_type = '*ALL' OR REFERENCED_OBJTYP = :referenced_type)
       ORDER BY REFERENCED_OBJTYP, REFERENCED_OBJ
       FETCH FIRST :limit ROWS ONLY
+
+  # ── 46. Member Copybooks — copybooks used by a source member ───────────────
+  ia_member_copybooks:
+    name: ia-member-copybooks
+    source: ibmi
+    description: >
+      List all copybooks included by a source member via /COPY or /INCLUDE.
+      Inverse of ia_copybook_impact: shows what copybooks a member USES rather
+      than what members use a copybook. Essential for understanding a program's
+      dependencies and ensuring all required copybooks are available.
+      Queries COPYBOOK_MEMBER_DETAIL.
+    parameters:
+      - name: member_name
+        type: string
+        description: "Source member name (e.g., IORDV11, IAPCOD01SV)"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: member_library
+        type: string
+        description: "Filter by member library (default: *ALL for all libraries)"
+        required: false
+        default: "*ALL"
+      - name: limit
+        type: integer
+        description: "Max results (default: 200)"
+        required: false
+        default: 200
+        min: 1
+        max: 1000
+    statement: |
+      SELECT
+        RTRIM(COPYBOOK_MEMBER_NAME) AS copybook_name,
+        RTRIM(COPYBOOK_MEMBER_LIBRARY) AS copybook_library,
+        RTRIM(COPYBOOK_SOURCE_FILE) AS copybook_source_file,
+        MEMBER_RRN_NUMBER AS copy_line_number,
+        RTRIM(COPYBOOK_DIRECTIVES) AS directive,
+        RTRIM(MEMBER_NAME) AS member_name,
+        RTRIM(MEMBER_LIBRARY) AS member_library,
+        RTRIM(MEMBER_TYPE) AS member_type
+      FROM ${IA_LIBRARY}.COPYBOOK_MEMBER_DETAIL
+      WHERE MEMBER_NAME = :member_name
+        AND (:member_library = '*ALL' OR MEMBER_LIBRARY = :member_library)
+      ORDER BY MEMBER_RRN_NUMBER
+      FETCH FIRST :limit ROWS ONLY
