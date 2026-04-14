@@ -115,7 +115,7 @@ FETCH FIRST 10000 ROWS ONLY
 
 **Why:** Dedicated tools truncate silently. `execute_sql` with correct SQL gives you full control.
 
-## Dedicated Tools (44)
+## Dedicated Tools (45)
 
 ### Discovery — start here
 | Tool | Purpose |
@@ -132,6 +132,7 @@ FETCH FIRST 10000 ROWS ONLY
 | Tool | Purpose |
 |------|---------|
 | `ia_where_used` | Broad where-used: all objects referencing `object_name` (optional type filter) |
+| `ia_object_references` | Inverse of ia_where_used: what an object references/contains (modules in SRVPGM, SRVPGMs in BNDDIR, files used) |
 | `ia_reference_count` | Lightweight: counts of references grouped by type |
 | `ia_field_impact` | Field-level blast radius: programs affected if field X in file Y changes |
 
