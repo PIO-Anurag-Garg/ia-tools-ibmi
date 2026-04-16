@@ -34,6 +34,7 @@ Most iA questions can be answered with a single well-chosen tool. Before calling
 | "Procedure callers?" | `ia_procedure_xref` | Procedure-level call graph |
 | "Batch jobs?" | `ia_cl_jobs` | SBMJOB calls in CL programs |
 | "Procedure signature?" | `ia_procedure_params` | PR/PI parameter definitions |
+| "Who created X?" | `execute_sql` (SQL #20) | `OBJECT_DETAILS.CREATED_BY_USER` — actual developer profile |
 
 ### Source Code Retrieval Workflow
 

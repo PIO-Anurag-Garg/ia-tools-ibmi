@@ -326,6 +326,33 @@ Supports `%` wildcards. Returns type, library, attribute for all matches.
 
 ---
 
+### QF-29: "Who created object X?" / "Who developed program X?"
+
+**Single query:**
+```sql
+SELECT OBJECT_NAME, OBJECT_TYPE, OBJECT_ATTRIBUTE, CREATED_BY_USER, 
+       CREATION_DATE, CREATION_TIME, OBJECT_TEXT
+FROM IADEMODEV.OBJECT_DETAILS
+WHERE OBJECT_NAME = '<OBJECT_NAME>'
+```
+
+**Key column:** `CREATED_BY_USER` — the IBM i user profile that created the object.
+
+**For multiple objects:**
+```sql
+SELECT OBJECT_NAME, OBJECT_TYPE, CREATED_BY_USER, CREATION_DATE
+FROM IADEMODEV.OBJECT_DETAILS
+WHERE CREATED_BY_USER = '<USER_PROFILE>'
+ORDER BY CREATION_DATE DESC
+FETCH FIRST 100 ROWS ONLY
+```
+
+**Date format note:** `CREATION_DATE` is stored as MMDDYY (e.g., `102523` = October 25, 2023). The `CREATION_CENTURY` column indicates 0=1900s, 1=2000s.
+
+**Anti-pattern:** Don't search `IA_CODE_INFO.CREATED_BY` or `COPYBOOK_MEMBER_DETAIL.CREATED_BY` — those track iA scan metadata (who ran the parser), not original development. Use `OBJECT_DETAILS.CREATED_BY_USER` for actual developer attribution.
+
+---
+
 ## Optimization Decision Tree
 
 ```

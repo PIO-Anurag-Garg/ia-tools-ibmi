@@ -31,13 +31,29 @@ body:
         - ia_reference_count
         - ia_unused_objects
         - ia_circular_deps
-        - ia_where_used_detail
         - ia_override_chain
         - ia_object_lifecycle
         - ia_code_complexity
         - ia_library_files
         - ia_object_lookup
         - ia_file_dependencies
+        - ia_uncompiled_sources
+        - ia_copybook_impact
+        - ia_member_copybooks
+        - ia_srvpgm_exports
+        - ia_procedure_xref
+        - ia_procedure_params
+        - ia_cl_jobs
+        - ia_variable_ops
+        - ia_klist_usage
+        - ia_application_area
+        - ia_sql_names
+        - ia_program_files
+        - ia_rpg_source
+        - ia_rpg_source_search
+        - ia_rpg_source_stats
+        - ia_member_lookup
+        - ia_object_references
         - execute_sql
         - describe_sql_object
     validations:
