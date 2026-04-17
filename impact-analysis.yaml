@@ -285,9 +285,10 @@ tools:
     source: ibmi
     maxDisplayRows: 1000
     description: >
-      List all subroutines (BEGSR/ENDSR) in a program with usage counts.
+      List all subroutines (BEGSR) in a program with usage counts.
       Helps understand internal program structure and identify dead subroutines.
-      Queries IASUBRDTL — EXSR/BEGSR mapping with line numbers.
+      Queries IASUBRDTL — BEGSR rows carry the subroutine name; ENDSR rows are
+      excluded because RPG ENDSR doesn't carry a name (stored blank).
     parameters:
       - name: member_name
         type: string
@@ -310,6 +311,7 @@ tools:
         MBR_RRN AS line_number
       FROM ${IA_LIBRARY}.IASUBRDTL
       WHERE MBR_NAME = :member_name
+        AND SR_OPCODE = 'BEGSR'
       ORDER BY SR_SBR_NAME
       FETCH FIRST :limit ROWS ONLY
 
@@ -560,6 +562,7 @@ tools:
         CAST(MBR_RRN AS VARCHAR(50)) AS detail_3
       FROM ${IA_LIBRARY}.IASUBRDTL
       WHERE MBR_NAME = :program_name
+        AND SR_OPCODE = 'BEGSR'
         AND (:section = '*ALL' OR :section = 'SUBROUTINES')
 
       UNION ALL
