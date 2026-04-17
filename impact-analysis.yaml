@@ -326,12 +326,21 @@ tools:
       Get all OVRDBF (Override with Database File) statements. Critical for
       understanding actual file routing vs. what is declared in F-specs.
       File overrides can silently redirect I/O to different files.
-      Pass '*ALL' for member_name to see all overrides across all members.
+      Pass '*ALL' for member_name or library_name to see all overrides.
+      Returns source location (library, file, member), compiled program,
+      from/to file routing, override member, scope, share flag, and line
+      numbers for both the OVRDBF and any corresponding DLTOVR statements.
       Queries IAOVRPF.
     parameters:
       - name: member_name
         type: string
-        description: "Source member name, or '*ALL' for all overrides"
+        description: "Source member name, or '*ALL' for all members"
+        required: false
+        default: "*ALL"
+        maxLength: 10
+      - name: library_name
+        type: string
+        description: "Source library name, or '*ALL' for all libraries"
         required: false
         default: "*ALL"
         maxLength: 10
@@ -344,14 +353,22 @@ tools:
         max: 5000
     statement: |
       SELECT
+        IOVR_LIB AS source_library,
+        IOVR_FILE AS source_file,
         IOVR_MBR AS member_name,
+        IOVR_PGM AS program_name,
         IOVR_FROM AS from_file,
         IOVR_TO AS to_file,
+        IOVR_FILMBR AS override_member,
         IOVR_SCP AS override_scope,
-        IOVR_RRN AS line_number
+        IOVR_SHR AS override_share,
+        IOVR_RRN AS line_number,
+        IOVR_DRRN AS dltovr_line_number,
+        IOVR_DARRN AS dltovr_all_line_number
       FROM ${IA_LIBRARY}.IAOVRPF
       WHERE (:member_name = '*ALL' OR IOVR_MBR = :member_name)
-      ORDER BY IOVR_MBR, IOVR_RRN
+        AND (:library_name = '*ALL' OR IOVR_LIB = :library_name)
+      ORDER BY IOVR_LIB, IOVR_MBR, IOVR_RRN
       FETCH FIRST :limit ROWS ONLY
 
   # ── 9. File Fields — field-level metadata for a database file ───────────
