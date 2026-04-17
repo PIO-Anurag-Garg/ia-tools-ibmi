@@ -1620,13 +1620,15 @@ tools:
       Returns source text with line numbers, spec types, and format classification.
       Optionally filter by RPG specification type (C, D, F, H, I, O, P) to see
       only calc specs, definitions, file declarations, etc.
+      Use member_name=*ALL with source_spec=H and a library_name to list all members
+      containing a given spec type across a library.
       Queries IAQRPGSRC. Use ia_source_code for member metadata (location, line counts).
     parameters:
       - name: member_name
         type: string
-        description: "RPG source member name (e.g., CUSTMAST, ORDENT01)"
-        required: true
-        minLength: 1
+        description: "RPG source member name, or *ALL to search across all members (default: *ALL)"
+        required: false
+        default: "*ALL"
         maxLength: 10
       - name: source_spec
         type: string
@@ -1658,10 +1660,10 @@ tools:
         SOURCE_RRN, SOURCE_SEQ, SOURCE_SPEC,
         SRCLIN_TYPE, SOURCE_DATA
       FROM ${IA_LIBRARY}.IAQRPGSRC
-      WHERE MEMBER_NAME = :member_name
+      WHERE (:member_name = '*ALL' OR MEMBER_NAME = :member_name)
         AND (:source_spec = '*ALL' OR SOURCE_SPEC = :source_spec)
         AND (:library_name = '*ALL' OR LIBRARY_NAME = :library_name)
-      ORDER BY LIBRARY_NAME, SOURCE_RRN
+      ORDER BY LIBRARY_NAME, MEMBER_NAME, SOURCE_RRN
       OFFSET :offset ROWS
       FETCH FIRST :limit ROWS ONLY
 
