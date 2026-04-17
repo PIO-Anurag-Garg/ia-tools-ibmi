@@ -163,7 +163,7 @@ FETCH FIRST 10000 ROWS ONLY
 ### Source-level analysis
 | Tool | Purpose |
 |------|---------|
-| `ia_rpg_source` | Read RPG source code line-by-line with optional spec-type filter (IAQRPGSRC) |
+| `ia_rpg_source` | Read RPG source code line-by-line; member_name=*ALL to find members by spec type across a library (IAQRPGSRC) |
 | `ia_rpg_source_search` | Cross-member keyword search in RPG source (IAQRPGSRC) |
 | `ia_rpg_source_stats` | Modernization metrics: free-format %, comment ratio, cross-library (IAQRPGSRC) |
 | `ia_rpg_source_tokens` | Token-level RPG parse (IAPGMREF) |
@@ -231,6 +231,7 @@ FETCH FIRST 10000 ROWS ONLY
 | List tables in iA library? | `ia_library_files` | [#7](references/sql-patterns.md) |
 | Raw RPG/CL token stream? | `ia_rpg_source_tokens`, `ia_cl_source_tokens` | — |
 | RPG source code for member X? | `ia_rpg_source` (optional `source_spec` filter) | — |
+| Members with spec type H/F/P in library X? | `ia_rpg_source` (member_name=*ALL, source_spec=H, library_name=X) | — |
 | **Source for program X? (business rules)** | `ia_object_lookup` → `execute_sql` (SQL #18) | 2 calls |
 | **Source for member name?** | `ia_member_lookup` → `execute_sql` (SQL #18) | 2 calls |
 | Search RPG source for keyword? | `ia_rpg_source_search` | — |

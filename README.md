@@ -71,7 +71,7 @@ A token-efficient skill at `.claude/skills/ia/` that teaches AI agents how to qu
 | 38 | `ia_application_area` | List application areas and their objects |
 | 39 | `ia_sql_names` | Map SQL long names to system short names |
 | 40 | `ia_program_files` | List files used by a program with PREFIX details |
-| 41 | `ia_rpg_source` | Read RPG source code with optional spec-type filtering |
+| 41 | `ia_rpg_source` | Read RPG source code with optional spec-type and member filtering (supports *ALL member) |
 | 42 | `ia_rpg_source_search` | Search RPG source across members for keywords |
 | 43 | `ia_rpg_source_stats` | Modernization stats: free-format vs fixed-format, comment ratio |
 | 44 | `ia_member_lookup` | Look up source member metadata and verify existence |
