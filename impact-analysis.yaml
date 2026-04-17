@@ -1809,7 +1809,7 @@ tools:
         maxLength: 10
       - name: member_type
         type: string
-        description: "Member type filter (e.g., RPGLE, SQLRPGLE, CLLE), or *ALL (default: *ALL)"
+        description: "Member type filter (e.g., RPGLE, SQLRPGLE, CLLE), or *ALL (default: *ALL). Supports % wildcards (e.g., %SQL% matches SQLRPGLE, SQLCLLE)."
         required: false
         default: "*ALL"
         maxLength: 10
@@ -1835,7 +1835,7 @@ tools:
       WHERE MEMBER_NAME LIKE :member_name
         AND (:source_file = '*ALL' OR SOURCE_FILE = :source_file)
         AND (:source_library = '*ALL' OR SOURCE_LIBRARY = :source_library)
-        AND (:member_type = '*ALL' OR MEMBER_TYPE = :member_type)
+        AND (:member_type = '*ALL' OR MEMBER_TYPE LIKE :member_type)
       ORDER BY MEMBER_NAME, SOURCE_LIBRARY, SOURCE_FILE
       FETCH FIRST :limit ROWS ONLY
 
