@@ -25,6 +25,7 @@ tools:
   ia_where_used:
     name: ia-where-used
     source: ibmi
+    fetchAllRows: true
     maxDisplayRows: 1000
     description: >
       Find every program, service program, command, display file, and logical file
@@ -72,6 +73,7 @@ tools:
   ia_call_hierarchy:
     name: ia-call-hierarchy
     source: ibmi
+    fetchAllRows: true
     maxDisplayRows: 1000
     description: >
       Generate the call tree for a program — who calls it (CALLERS), what it calls
@@ -125,6 +127,7 @@ tools:
   ia_field_impact:
     name: ia-field-impact
     source: ibmi
+    fetchAllRows: true
     maxDisplayRows: 1000
     description: >
       Analyze the blast radius of changing a specific field in a database file.
@@ -175,6 +178,7 @@ tools:
   ia_program_variables:
     name: ia-program-variables
     source: ibmi
+    fetchAllRows: true
     maxDisplayRows: 1000
     description: >
       List all variables declared in a program/module with full type information.
@@ -211,6 +215,7 @@ tools:
   ia_data_structures:
     name: ia-data-structures
     source: ibmi
+    fetchAllRows: true
     maxDisplayRows: 1000
     description: >
       Get all data structure definitions in a program, including nested DS, based DS,
@@ -252,6 +257,8 @@ tools:
   ia_call_parameters:
     name: ia-call-parameters
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Get parameter details for all external calls made by a program.
       Shows what data is passed to each called program/procedure.
@@ -286,6 +293,7 @@ tools:
   ia_subroutines:
     name: ia-subroutines
     source: ibmi
+    fetchAllRows: true
     maxDisplayRows: 1000
     description: >
       List all subroutines (BEGSR) in a program with usage counts.
@@ -322,6 +330,8 @@ tools:
   ia_file_overrides:
     name: ia-file-overrides
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Get all OVRDBF (Override with Database File) statements. Critical for
       understanding actual file routing vs. what is declared in F-specs.
@@ -375,6 +385,8 @@ tools:
   ia_file_fields:
     name: ia-file-fields
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Get field-level metadata for a database file: internal names, aliases, data types,
       lengths, key field sequence, reference field chain, usage mode, and record formats.
@@ -419,6 +431,8 @@ tools:
   ia_object_list:
     name: ia-object-list
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       List all objects in the iA repository with metadata: type, attribute, library,
       source file/member, creation date, and exclusion status.
@@ -457,6 +471,8 @@ tools:
   ia_program_info:
     name: ia-program-info
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Get detailed metadata for a program or module: source file, member,
       attributes, and last change date. Queries IAPGMINF.
@@ -478,6 +494,8 @@ tools:
   ia_program_summary:
     name: ia-program-summary
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Quick overview of a program — metadata, compile info, and complexity metrics.
       Provides a concise summary in a single query. Queries IAPGMINF, IA_CODE_INFO,
@@ -535,6 +553,7 @@ tools:
   ia_program_detail:
     name: ia-program-detail
     source: ibmi
+    fetchAllRows: true
     maxDisplayRows: 1000
     description: >
       Deep structural analysis of a program — calls, files, subroutines, variables,
@@ -634,6 +653,8 @@ tools:
   ia_source_code:
     name: ia-source-code
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Get source member location and metadata from IASRCMBRID. Returns the
       source file, library, member type, and line counts. Use this to find
@@ -670,6 +691,7 @@ tools:
   ia_rpg_source_tokens:
     name: ia-rpg-source-tokens
     source: ibmi
+    fetchAllRows: true
     maxDisplayRows: 1000
     description: >
       Get the token-level analysis of an RPG source member — every word/token
@@ -707,6 +729,8 @@ tools:
   ia_cl_source_tokens:
     name: ia-cl-source-tokens
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Get the token-level analysis of a CL source member — every word/token
       categorized by the iA parser. Queries IACPGMREF.
@@ -742,6 +766,8 @@ tools:
   ia_dashboard:
     name: ia-dashboard
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Get the iA dashboard summary: member categories (compiled, unused, orphaned),
       line counts, and library mappings. Good overview of repository health.
@@ -767,6 +793,8 @@ tools:
   ia_repo_config:
     name: ia-repo-config
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Get the iA repository configuration settings (IFS locations, scan options, etc.).
       Queries REPO_CONFIGURATION.
@@ -779,6 +807,8 @@ tools:
   ia_exception_log:
     name: ia-exception-log
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       View iA parser exceptions — useful for understanding why certain members
       may have incomplete analysis or missing cross-references.
@@ -807,6 +837,8 @@ tools:
   ia_dds_to_ddl_status:
     name: ia-dds-to-ddl-status
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       View the status of DDS to DDL (SQL) file conversions tracked by iA.
       Shows which files have been converted, pending, and dependent programs.
@@ -829,6 +861,8 @@ tools:
   ia_reference_count:
     name: ia-reference-count
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Get a quick count of how many objects reference a given object, grouped by
       object type. Lightweight alternative to ia_where_used when you only need
@@ -854,6 +888,8 @@ tools:
   ia_unused_objects:
     name: ia-unused-objects
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Find objects in the repository that are not referenced by any other object.
       Useful for identifying dead code candidates for cleanup.
@@ -881,6 +917,8 @@ tools:
   ia_circular_deps:
     name: ia-circular-deps
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Detect circular dependencies — programs that call each other directly
       or indirectly. These create maintenance risks and can cause infinite loops.
@@ -900,6 +938,8 @@ tools:
   ia_override_chain:
     name: ia-override-chain
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Find all file override chains — cases where file A is overridden to file B,
       which may itself be overridden to file C. These chains create hidden
@@ -922,6 +962,8 @@ tools:
   ia_object_lifecycle:
     name: ia-object-lifecycle
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Get lifecycle metadata for an object: creation date/time, last change date/time,
       last-used date, days-used count, and object text. Use to understand how recently
@@ -976,6 +1018,8 @@ tools:
   ia_code_complexity:
     name: ia-code-complexity
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Code complexity metrics per source member — IF/DO/SQL/GOTO/PROC counts,
       total and executable line counts, and call statistics. Use to identify the
@@ -1031,6 +1075,8 @@ tools:
   ia_library_files:
     name: ia-library-files
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       List all files and tables in the iA repository library.
       Shows file name, type (TABLE, VIEW, etc.), last altered date,
@@ -1066,6 +1112,8 @@ tools:
   ia_object_lookup:
     name: ia-object-lookup
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Look up an object by name to find its type, library, and attribute.
       Queries IAOBJMAP (object-to-source mapping table).
@@ -1095,6 +1143,8 @@ tools:
   ia_file_dependencies:
     name: ia-file-dependencies
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Find all logical files, indexes, and SQL views that depend on a physical file.
       Essential for field change impact analysis — changes to a PF propagate to all
@@ -1138,6 +1188,8 @@ tools:
   ia_uncompiled_sources:
     name: ia-uncompiled-sources
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Find source members that have no corresponding compiled object.
       Useful for identifying dormant code, abandoned development, or sources
@@ -1178,6 +1230,8 @@ tools:
   ia_copybook_impact:
     name: ia-copybook-impact
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Find all source members that include a specific copybook via /COPY or /INCLUDE.
       Critical for understanding the blast radius of copybook changes — any modification
@@ -1223,6 +1277,8 @@ tools:
   ia_srvpgm_exports:
     name: ia-srvpgm-exports
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       List all exported and imported procedures for a service program or module.
       Essential for understanding the API surface of a *SRVPGM — what procedures
@@ -1265,6 +1321,8 @@ tools:
   ia_procedure_xref:
     name: ia-procedure-xref
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Find all procedures that call a specific procedure, or all procedures
       called by a specific procedure. More granular than ia_call_hierarchy —
@@ -1321,6 +1379,8 @@ tools:
   ia_cl_jobs:
     name: ia-cl-jobs
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Find SBMJOB and CALL commands in CL programs, including job queue,
       job description, and hold status. Critical for understanding batch
@@ -1367,6 +1427,8 @@ tools:
   ia_procedure_params:
     name: ia-procedure-params
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Get the parameter signature of a procedure — parameter names, types,
       keywords (CONST, VALUE, OPTIONS), and sequence. Shows both PR (prototype)
@@ -1412,6 +1474,7 @@ tools:
   ia_variable_ops:
     name: ia-variable-ops
     source: ibmi
+    fetchAllRows: true
     maxDisplayRows: 1000
     description: >
       Find all operations involving a variable — declarations (DCL-DS, DCLVAR),
@@ -1464,6 +1527,8 @@ tools:
   ia_klist_usage:
     name: ia-klist-usage
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Find KLIST (key list) definitions and their KFLD (key field) components.
       Shows how programs build composite keys for CHAIN, SETLL, SETGT operations.
@@ -1504,6 +1569,8 @@ tools:
   ia_application_area:
     name: ia-application-area
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       List application areas (named project scopes) and optionally the objects
       in each area. Use *LIST to see all defined areas, or provide an area name
@@ -1549,6 +1616,8 @@ tools:
   ia_sql_names:
     name: ia-sql-names
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Resolve SQL long names to IBM i short names and vice versa. SQL procedures
       and functions often have cryptic 10-character system names (like STORE00001)
@@ -1597,6 +1666,8 @@ tools:
   ia_program_files:
     name: ia-program-files
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       List all files used by a program, including PREFIX keyword mapping,
       renamed files, and record format details. More detailed than ia_where_used
@@ -1640,6 +1711,7 @@ tools:
   ia_rpg_source:
     name: ia-rpg-source
     source: ibmi
+    fetchAllRows: true
     maxDisplayRows: 1000
     description: >
       Read the actual RPG source code for a member, line by line.
@@ -1697,6 +1769,7 @@ tools:
   ia_rpg_source_search:
     name: ia-rpg-source-search
     source: ibmi
+    fetchAllRows: true
     maxDisplayRows: 1000
     description: >
       Search across all RPG source members for lines containing a keyword or pattern.
@@ -1743,6 +1816,8 @@ tools:
   ia_rpg_source_stats:
     name: ia-rpg-source-stats
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Get source format statistics per RPG member: free-format vs fixed-format line counts,
       comment-to-code ratio, and modernization readiness percentage. When a member exists
@@ -1792,6 +1867,8 @@ tools:
   ia_member_lookup:
     name: ia-member-lookup
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Look up source member metadata: file location, type, description, record counts,
       and creation/change/usage timestamps. Use this to verify member existence before
@@ -1852,6 +1929,7 @@ tools:
   ia_object_references:
     name: ia-object-references
     source: ibmi
+    fetchAllRows: true
     maxDisplayRows: 1000
     description: >
       Find all objects that a given object references, uses, or contains.
@@ -1900,6 +1978,8 @@ tools:
   ia_member_copybooks:
     name: ia-member-copybooks
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       List all copybooks included by a source member via /COPY or /INCLUDE.
       Inverse of ia_copybook_impact: shows what copybooks a member USES rather
@@ -1945,6 +2025,8 @@ tools:
   ia_obj_size:
     name: ia-obj-size
     source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
     description: >
       Object size and usage metrics from IAOBJUSGDP. Works in two modes:
       (1) Lookup — supply object_name (+ optional library/type) for a specific
