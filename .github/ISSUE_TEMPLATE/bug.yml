@@ -8,7 +8,7 @@ body:
       label: Tool Name
       description: Which tool is affected?
       options:
-        - ia_where_used
+        - ia_find_object_usages
         - ia_call_hierarchy
         - ia_field_impact
         - ia_program_variables
@@ -95,7 +95,7 @@ body:
       description: How can we reproduce the issue?
       placeholder: |
         1. Set IA_LIBRARY=SDK01
-        2. Call ia_where_used with object_name='CUSTFILE'
+        2. Call ia_find_object_usages with object_name='CUSTFILE'
         3. See error...
     validations:
       required: false

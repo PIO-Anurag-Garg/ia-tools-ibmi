@@ -19,7 +19,7 @@ Returns: All programs affected, their usage type (READ/WRITE/UPDATE), and object
 **Deep-dive chain (if needed):**
 ```
 1. ia_field_impact → Get affected programs
-2. ia_where_used(object_name="<srvpgm>", object_type="*SRVPGM") → Only for *SRVPGM in results (cascade check)
+2. ia_find_object_usages(object_name="<srvpgm>", object_type="*SRVPGM") → Only for *SRVPGM in results (cascade check)
 3. ia_call_hierarchy(program_name="<critical_pgm>", direction="callers") → Only for critical programs
 ```
 
@@ -56,12 +56,12 @@ Returns: All programs affected, their usage type (READ/WRITE/UPDATE), and object
 
 **Two-query approach:**
 ```
-1. ia_where_used(object_name="CUSTMAST", object_type="*FILE")
+1. ia_find_object_usages(object_name="CUSTMAST", object_type="*FILE")
    → Returns: using objects with their types
 2. ia_file_fields(file_name="CUSTMAST") → Field definitions
 ```
 
-**Skip** `ia_reference_count` — it's redundant when you already have `ia_where_used` results (just count them).
+**Skip** `ia_reference_count` — it's redundant when you already have `ia_find_object_usages` results (just count them).
 
 ---
 
@@ -135,7 +135,7 @@ Returns: IF_COUNT, DO_COUNT, SQL_COUNT, GOTO_COUNT, CALLED_BY_COUNT, TOTAL_OPERA
 ia_dds_to_ddl_status(limit=200)
 ```
 
-**Only chain** `ia_where_used` for specific files the user wants to prioritize.
+**Only chain** `ia_find_object_usages` for specific files the user wants to prioritize.
 
 ---
 
@@ -165,7 +165,7 @@ ia_copybook_impact(copybook_name="CUSTDS", limit=200)
 ```
 Returns: All members including the copybook, with line numbers and member types.
 
-**Chain only if** user wants to understand the programs that use those members — then use `ia_where_used` on specific compiled objects.
+**Chain only if** user wants to understand the programs that use those members — then use `ia_find_object_usages` on specific compiled objects.
 
 ---
 
@@ -209,7 +209,7 @@ Returns: SBMJOB calls with job name, job queue, hold flag.
 ```
 ia_program_files(member_name="ORDENTRY", limit=50)
 ```
-Returns: Files used with PREFIX, RENAME, record format — more detailed than ia_where_used for file analysis.
+Returns: Files used with PREFIX, RENAME, record format — more detailed than ia_find_object_usages for file analysis.
 
 ---
 
@@ -321,7 +321,7 @@ Supports `%` wildcards. Returns type, library, attribute for all matches.
 **Two-query approach:**
 ```
 1. ia_object_lookup(object_name="%SRV") → Find SRVPGMs
-2. ia_where_used(object_name="<srvpgm>", object_type="*SRVPGM") → For each SRVPGM of interest
+2. ia_find_object_usages(object_name="<srvpgm>", object_type="*SRVPGM") → For each SRVPGM of interest
 ```
 
 ---
@@ -358,11 +358,11 @@ FETCH FIRST 100 ROWS ONLY
 ```
 User Question
     │
-    ├─► "What uses X?" ──────────► ia_where_used (single call)
+    ├─► "What uses X?" ──────────► ia_find_object_usages (single call)
     │                              └─► Chain ia_call_hierarchy ONLY if *SRVPGM in results
     │
     ├─► "Impact of changing X?" ─► ia_field_impact (single call)
-    │                              └─► Chain ia_where_used ONLY for *SRVPGM amplifiers
+    │                              └─► Chain ia_find_object_usages ONLY for *SRVPGM amplifiers
     │
     ├─► "What does X call?" ─────► ia_call_hierarchy direction=called (single call)
     │
@@ -394,7 +394,7 @@ User Question
 
 | Bad Pattern | Why It's Bad | Better Approach |
 |-------------|--------------|-----------------|
-| `ia_where_used` then `ia_reference_count` on same object | Redundant — just count the where_used results | Use only `ia_where_used` |
+| `ia_find_object_usages` then `ia_reference_count` on same object | Redundant — just count the where_used results | Use only `ia_find_object_usages` |
 | `ia_source_code` before `ia_rpg_source_tokens` | source_code only returns location, not content | Go straight to `ia_rpg_source_tokens` |
 | `ia_program_summary` + `ia_program_variables` + `ia_subroutines` | Three queries for one program | Use `ia_program_detail section=*ALL` |
 | `ia_object_lifecycle` for every unused object | Unnecessary — unused_objects already confirms zero refs | Only check lifecycle for specific objects |

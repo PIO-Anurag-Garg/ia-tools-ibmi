@@ -17,7 +17,7 @@ Most iA questions can be answered with a single well-chosen tool. Before calling
 
 | User Intent | Single Best Tool | Returns |
 |-------------|------------------|---------|
-| "What uses X?" | `ia_where_used` | Referencing objects with library, usage type, file usage |
+| "What uses X?" | `ia_find_object_usages` | Referencing objects with library, usage type, file usage |
 | "Impact of field change?" | `ia_field_impact` | Affected programs + usage type |
 | "LFs/views over file X?" | `ia_file_dependencies` | All dependent logical files, indexes, views |
 | "Tell me about program X" | `ia_program_detail` (section=*ALL) | Calls, files, subs, vars, overrides — ALL in one query |
@@ -85,7 +85,7 @@ FETCH FIRST 10000 ROWS ONLY
 - "Show file declarations" → Use SQL with `SOURCE_SPEC = 'F'`
 - "Show data definitions" → Use SQL with `SOURCE_SPEC = 'D'`
 
-**For other tools (ia_where_used, ia_field_impact, etc.):**
+**For other tools (ia_find_object_usages, ia_field_impact, etc.):**
 - If results hit the limit, tell user: "Showing first N results. There may be more — increase limit?"
 - **If you anticipate >100 rows upfront:** Skip the dedicated tool. Use `execute_sql` directly with the SQL pattern from [references/sql-patterns.md](references/sql-patterns.md). This avoids truncation surprises.
 
@@ -96,7 +96,7 @@ FETCH FIRST 10000 ROWS ONLY
 **DO chain for field impact:** Logical files and views built over a physical file **propagate field changes** to all programs using those LFs. When analyzing field changes, always ask the user if they want the full blast radius including LF-dependent programs:
 1. `ia_field_impact` → direct references to the PF
 2. `ia_file_dependencies` → LFs/views over the PF
-3. `ia_where_used` on each LF → programs using those LFs
+3. `ia_find_object_usages` on each LF → programs using those LFs
 
 **DON'T chain** for:
 - Simple counts (just count your results)
@@ -133,8 +133,8 @@ FETCH FIRST 10000 ROWS ONLY
 ### Where-used & references — highest-impact queries
 | Tool | Purpose |
 |------|---------|
-| `ia_where_used` | Broad where-used: all objects referencing `object_name` (optional type filter) |
-| `ia_object_references` | Inverse of ia_where_used: what an object references/contains (modules in SRVPGM, SRVPGMs in BNDDIR, files used) |
+| `ia_find_object_usages` | Broad where-used: all objects referencing `object_name` (optional type + library filter) |
+| `ia_object_references` | Inverse of ia_find_object_usages: what an object references/contains (modules in SRVPGM, SRVPGMs in BNDDIR, files used) |
 | `ia_reference_count` | Lightweight: counts of references grouped by type |
 | `ia_field_impact` | Field-level blast radius: programs affected if field X in file Y changes |
 
@@ -207,7 +207,7 @@ FETCH FIRST 10000 ROWS ONLY
 
 | User Intent | Tool (≤100 rows) | SQL Pattern (>100 rows) |
 |-------------|----------------|----------------------|
-| What references object X? | `ia_where_used` | [#1](references/sql-patterns.md) |
+| What references object X? | `ia_find_object_usages` | [#1](references/sql-patterns.md) |
 | How many refs to X? | `ia_reference_count` | — |
 | What does X call / who calls X? | `ia_call_hierarchy` | [#2, #3](references/sql-patterns.md) |
 | Params passed at each call site? | `ia_call_parameters` | — |
@@ -269,12 +269,12 @@ FETCH FIRST 10000 ROWS ONLY
 
 ## Interpreting Results
 
-- **`*SRVPGM`** in results = amplifier — always check what depends on it next (chain `ia_where_used` or `ia_reference_count`)
+- **`*SRVPGM`** in results = amplifier — always check what depends on it next (chain `ia_find_object_usages` or `ia_reference_count`)
 - **`*DSPF`** = user-facing screen impact — flag prominently
 - **Empty results** are suspicious — object may be invoked by job scheduler or external system
 - Always: **summarize by object type**, count references, state risk level, suggest a concrete next step
 
-### `REFERENCE_SOURCE` column (`ia_where_used`, `IAALLREFPF`)
+### `REFERENCE_SOURCE` column (`ia_find_object_usages`, `IAALLREFPF`)
 
 | Value | Meaning |
 |-------|---------|
@@ -282,7 +282,7 @@ FETCH FIRST 10000 ROWS ONLY
 | `S` | Referenced by **source** — the dependency was detected by parsing the source code |
 | ` ` (blank) | Source not applicable (e.g., binding directory entries) |
 
-### `REFERENCE_USAGE` column (`ia_where_used`, `ia_object_references`, `IAALLREFPF`)
+### `REFERENCE_USAGE` column (`ia_find_object_usages`, `ia_object_references`, `IAALLREFPF`)
 
 | Value | Meaning |
 |-------|---------|
@@ -290,7 +290,7 @@ FETCH FIRST 10000 ROWS ONLY
 | `E` | **Explicit** — direct reference (e.g., direct bind or call) |
 | ` ` (blank) | Not applicable for this reference type |
 
-### `FILE_USAGE` column (`ia_where_used`, `ia_field_impact`, `ia_object_references`, `IAALLREFPF`)
+### `FILE_USAGE` column (`ia_find_object_usages`, `ia_field_impact`, `ia_object_references`, `IAALLREFPF`)
 
 Populated only for `*FILE` references; blank for other object types (e.g., `*SRVPGM`, `*MODULE`).
 Indicates how the program uses the file (input, output, update, etc.).

@@ -25,7 +25,7 @@ A token-efficient skill at `.claude/skills/ia/` that teaches AI agents how to qu
 
 | # | Tool | Description |
 |---|------|-------------|
-| 1 | `ia_where_used` | Find all objects referencing a given object |
+| 1 | `ia_find_object_usages` | Find all objects referencing a given object (filter by type or library) |
 | 2 | `ia_call_hierarchy` | Program call tree (CALLERS/CALLEES/BOTH) |
 | 3 | `ia_field_impact` | Blast radius of changing a field in a file |
 | 4 | `ia_program_variables` | All variables declared in a program |
@@ -75,7 +75,7 @@ A token-efficient skill at `.claude/skills/ia/` that teaches AI agents how to qu
 | 42 | `ia_rpg_source_search` | Search RPG source across members for keywords |
 | 43 | `ia_rpg_source_stats` | Modernization stats: free-format vs fixed-format, comment ratio |
 | 44 | `ia_member_lookup` | Look up source member metadata and verify existence |
-| 45 | `ia_object_references` | Find what an object references/contains (inverse of ia_where_used) |
+| 45 | `ia_object_references` | Find what an object references/contains (inverse of ia_find_object_usages) |
 | 47 | `ia_obj_size` | Object size and usage metrics — lookup a specific object or rank the largest / unused objects |
 
 ### Built-in MCP Server Tools

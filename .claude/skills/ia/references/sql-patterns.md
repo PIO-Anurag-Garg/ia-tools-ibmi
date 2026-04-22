@@ -14,7 +14,7 @@
 ## Core Analysis
 
 ### #1 Where-Used (find all objects referencing X)
-**→ Use `ia_where_used`**
+**→ Use `ia_find_object_usages`**
 ```sql
 SELECT I.IAOOBJNAM AS using_object, I.IAOOBJTYP AS using_type,
   I.IAOOBJLIB AS using_library, I.IAOOBJATR AS using_attr,

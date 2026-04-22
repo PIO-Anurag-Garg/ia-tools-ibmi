@@ -8,7 +8,7 @@ body:
       label: Tool Name
       description: Which tool should be improved?
       options:
-        - ia_where_used
+        - ia_find_object_usages
         - ia_call_hierarchy
         - ia_field_impact
         - ia_program_variables

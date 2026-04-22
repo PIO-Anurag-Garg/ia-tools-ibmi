@@ -21,9 +21,9 @@ sources:
 
 tools:
 
-  # ── 1. Where Used — find all objects referencing a given object ──────────
-  ia_where_used:
-    name: ia-where-used
+  # ── 1. Find Object Usages — find all objects referencing a given object ──
+  ia_find_object_usages:
+    name: ia-find-object-usages
     source: ibmi
     fetchAllRows: true
     maxDisplayRows: 1000
@@ -31,6 +31,7 @@ tools:
       Find every program, service program, command, display file, and logical file
       that references a specific object. Most common impact analysis query.
       Use before modifying or deleting any object to understand the blast radius.
+      Optionally filter by the type or library of the referenced object.
       Queries the iA IAALLREFPF cross-reference table (richer than DSPPGMREF).
     parameters:
       - name: object_name
@@ -41,9 +42,15 @@ tools:
         maxLength: 10
       - name: object_type
         type: string
-        description: "Filter by type: *ALL, *PGM, *SRVPGM, *FILE, *DSPF, *CMD (default: *ALL)"
+        description: "Filter by referenced object type: *ALL, *PGM, *SRVPGM, *FILE, *DSPF, *CMD (default: *ALL)"
         required: false
         default: "*ALL"
+      - name: referenced_library
+        type: string
+        description: "Filter by the library the referenced object lives in (e.g., IAOBJDEV). Default: *ALL"
+        required: false
+        default: "*ALL"
+        maxLength: 10
       - name: limit
         type: integer
         description: "Max results (default: 200)"
@@ -66,6 +73,7 @@ tools:
       FROM ${IA_LIBRARY}.IAALLREFPF
       WHERE REFERENCED_OBJ = :object_name
         AND (:object_type = '*ALL' OR REFERENCED_OBJTYP = :object_type)
+        AND (:referenced_library = '*ALL' OR REFERENCED_OBJLIB = :referenced_library)
       ORDER BY OBJECT_TYPE, OBJECT_NAME
       FETCH FIRST :limit ROWS ONLY
 
@@ -865,7 +873,7 @@ tools:
     maxDisplayRows: 1000
     description: >
       Get a quick count of how many objects reference a given object, grouped by
-      object type. Lightweight alternative to ia_where_used when you only need
+      object type. Lightweight alternative to ia_find_object_usages when you only need
       the numbers, not the full list.
     parameters:
       - name: object_name
@@ -1670,7 +1678,7 @@ tools:
     maxDisplayRows: 1000
     description: >
       List all files used by a program, including PREFIX keyword mapping,
-      renamed files, and record format details. More detailed than ia_where_used
+      renamed files, and record format details. More detailed than ia_find_object_usages
       for understanding exactly how a program accesses its files.
       Queries PROGRAM_TO_FILE_MAPPING_DETAILS.
     parameters:
@@ -1933,7 +1941,7 @@ tools:
     maxDisplayRows: 1000
     description: >
       Find all objects that a given object references, uses, or contains.
-      Inverse of ia_where_used: shows what an object depends ON rather than
+      Inverse of ia_find_object_usages: shows what an object depends ON rather than
       what depends on IT. Use cases: modules bound into *PGM/*SRVPGM,
       service programs in a *BNDDIR, files used by a program, etc.
       Queries the iA IAALLREFPF cross-reference table.

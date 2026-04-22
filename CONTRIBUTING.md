@@ -45,8 +45,8 @@ Use issue templates for structured feedback:
 
 | Element | Convention | Example |
 |---------|------------|---------|
-| Tool key | `ia_snake_case` | `ia_where_used` |
-| MCP name | `ia-kebab-case` | `ia-where-used` |
+| Tool key | `ia_snake_case` | `ia_find_object_usages` |
+| MCP name | `ia-kebab-case` | `ia-find-object-usages` |
 | Parameters | `snake_case` | `object_name` |
 | Library | `${IA_LIBRARY}` | Never hardcode |
 | Bindings | `:param_name` | Prevents SQL injection |
