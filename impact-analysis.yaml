@@ -139,9 +139,16 @@ tools:
     maxDisplayRows: 1000
     description: >
       Analyze the blast radius of changing a specific field in a database file.
-      Returns all programs that reference the file, cross-referenced with field-level usage.
-      Critical before any field-level schema change (resize, rename, retype).
-      Combines IAALLREFPF (cross-references) with IAFILEDTL (field details).
+      Returns all objects that directly reference the file, classified by impact_type:
+      NEEDS_CHANGE (field found explicitly in RPG or CL source),
+      NEEDS_RECOMPILE (implicit record-format access, or *SRVPGM — source check unreliable),
+      STRUCTURAL (*FILE and *DSPF objects that inherit field definitions via DDS REF).
+      Also returns field metadata (type, length, decimals) from IAFILEDTL.
+      NOTE: Does NOT include programs that access the file via a logical file (LF).
+      For full blast radius, chain: ia_file_dependencies to find LFs, then
+      ia_find_object_usages on each LF to find LF-dependent programs.
+      Combines IAALLREFPF (cross-references), IAFILEDTL (field details),
+      IAQRPGSRC (RPG source search), and IAQCLSRC (CL source search).
     parameters:
       - name: file_name
         type: string
@@ -173,13 +180,33 @@ tools:
         ref.FILE_USAGES AS file_usage,
         ref.MAPED_FROM AS reference_type,
         fld.FIELD_DATA_TYPE AS field_type,
-        fld.FIELD_USE_MODE AS field_usage
+        fld.FIELD_LENGTH AS field_length,
+        fld.FIELD_DEC_POS AS decimal_positions,
+        CASE
+          WHEN ref.OBJECT_TYPE IN ('*FILE', '*DSPF') THEN 'STRUCTURAL'
+          WHEN ref.OBJECT_TYPE = '*SRVPGM'           THEN 'NEEDS_RECOMPILE'
+          WHEN src_rpg.MEMBER_NAME IS NOT NULL        THEN 'NEEDS_CHANGE'
+          WHEN src_cl.MEMBER_NAME  IS NOT NULL        THEN 'NEEDS_CHANGE'
+          ELSE 'NEEDS_RECOMPILE'
+        END AS impact_type
       FROM ${IA_LIBRARY}.IAALLREFPF ref
       LEFT JOIN ${IA_LIBRARY}.IAFILEDTL fld
-        ON fld.MEMBER_NAME = ref.OBJECT_NAME
+        ON fld.FILE_NAME = :file_name
         AND fld.FIELD_NAME_INTERNAL = :field_name
+      LEFT JOIN (
+        SELECT DISTINCT MEMBER_NAME
+        FROM ${IA_LIBRARY}.IAQRPGSRC
+        WHERE SOURCE_DATA LIKE '%' || :field_name || '%'
+      ) src_rpg ON src_rpg.MEMBER_NAME = ref.OBJECT_NAME
+        AND ref.OBJECT_ATTR IN ('RPGLE', 'SQLRPGLE', 'RPG', 'RPG38', 'RPGII', 'RPGILE')
+      LEFT JOIN (
+        SELECT DISTINCT MEMBER_NAME
+        FROM ${IA_LIBRARY}.IAQCLSRC
+        WHERE SOURCE_DATA LIKE '%' || :field_name || '%'
+      ) src_cl ON src_cl.MEMBER_NAME = ref.OBJECT_NAME
+        AND ref.OBJECT_ATTR IN ('CLLE', 'CLE', 'CL', 'CL38')
       WHERE ref.REFERENCED_OBJ = :file_name
-      ORDER BY ref.OBJECT_TYPE, ref.OBJECT_NAME
+      ORDER BY impact_type, ref.OBJECT_TYPE, ref.OBJECT_NAME
       FETCH FIRST :limit ROWS ONLY
 
   # ── 4. Program Variables — all variables declared in a program ──────────

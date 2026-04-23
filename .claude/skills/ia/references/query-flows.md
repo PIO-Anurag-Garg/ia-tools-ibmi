@@ -10,20 +10,31 @@ This reference documents optimal tool sequences for common queries. Follow these
 
 ### QF-1: "What happens if I change this file/field?" (Full Impact Analysis)
 
-**Single-query approach (preferred):**
+**Standard 3-tool chain (always run all steps, then synthesize):**
 ```
-ia_field_impact(field_name="CUSTNO", file_name="CUSTMAST", limit=500)
-```
-Returns: All programs affected, their usage type (READ/WRITE/UPDATE), and object types.
+1. ia_field_impact(file_name="CUSTMAST", field_name="CUSTNO", limit=500)
+   → Direct PF references: *PGM, *SRVPGM, *DSPF, *FILE
+   → impact_type: NEEDS_CHANGE / NEEDS_RECOMPILE / STRUCTURAL
 
-**Deep-dive chain (if needed):**
-```
-1. ia_field_impact → Get affected programs
-2. ia_find_object_usages(object_name="<srvpgm>", object_type="*SRVPGM") → Only for *SRVPGM in results (cascade check)
-3. ia_call_hierarchy(program_name="<critical_pgm>", direction="callers") → Only for critical programs
+2. ia_file_dependencies(file_name="CUSTMAST")
+   → LFs / indexes / views over the PF (STRUCTURAL — must be rebuilt)
+   → If none, stop here
+
+3. ia_find_object_usages(object_name="<each_LF>")  [parallel for multiple LFs]
+   → Programs/objects referencing those LFs — also impacted
 ```
 
-**Optimization:** Stop after step 1 if results are < 10 objects. Only chain for *SRVPGM amplifiers or > 20 affected objects.
+**impact_type values:**
+- `NEEDS_CHANGE` — field name found explicitly in RPG (IAQRPGSRC) or CL (IAQCLSRC) source; requires source edit
+- `NEEDS_RECOMPILE` — file referenced but field not in source (implicit record-format access); or `*SRVPGM` (source check by object name is unreliable)
+- `STRUCTURAL` — `*FILE` or `*DSPF` that inherits field definitions via DDS REF(); must be rebuilt, not just recompiled
+
+**Present as one response grouped by section:**
+- "Directly references PF": results from step 1
+- "Logical files / views over PF": results from step 2
+- "Programs via LF": results from step 3
+
+**Optimization:** Skip step 3 if ia_file_dependencies returns no LFs. Only chain `ia_call_hierarchy` for specific critical programs the user identifies.
 
 ---
 

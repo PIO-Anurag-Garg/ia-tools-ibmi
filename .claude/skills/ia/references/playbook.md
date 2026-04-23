@@ -60,7 +60,15 @@
 Call `ia_find_object_usages` → Group by `using_type`, count each → Flag `*SRVPGM` (cascade risk) and `*DSPF` (user-facing) → Ask: "Are you modifying, deleting, or just understanding X?" → For a quick tally, use `ia_reference_count` instead.
 
 ### P2: "What if I change field F in file X?" (Field Impact)
-Call `ia_field_impact` → Categorize: WRITE/UPDATE=highest risk, READ=moderate, null=unknown → Quantify: "N programs (M write, K read, J unknown) and D display files" → Ask: "Resizing, renaming, or retyping? Each has different implications."
+**Always run all 3 steps, then synthesize:**
+1. `ia_field_impact(file_name=X, field_name=F)` → direct PF references: *PGM, *SRVPGM, *DSPF, *FILE classified by impact_type
+2. `ia_file_dependencies(file_name=X)` → LFs / indexes / views over PF (STRUCTURAL — must be rebuilt)
+3. `ia_find_object_usages` on each LF found in step 2 → programs using those LFs (also need change/recompile)
+
+Categorize by `impact_type`: NEEDS_CHANGE=source edit required (field name explicit in RPG or CL source), NEEDS_RECOMPILE=recompile only (implicit record-format or *SRVPGM), STRUCTURAL=rebuild/recreate (*FILE or *DSPF inheriting field via DDS REF).
+Quantify: "N programs need code changes, M need recompile, K objects are structural dependencies."
+**Notes:** `*SRVPGM` always shows NEEDS_RECOMPILE (source check by SRVPGM name is unreliable). CL programs are now checked via IAQCLSRC — those with field in source correctly show NEEDS_CHANGE.
+Ask: "Resizing, renaming, or retyping? Each has different implications."
 
 ### P3: "Show call tree for program X" (Call Hierarchy)
 Call `ia_call_hierarchy` with `direction=BOTH` → Present in two sections: CALLERS / CALLEES → Flag: hub (>5 callers), zero callers (may be scheduler-invoked), deep chains → For parameter inspection at call sites, chain `ia_call_parameters`.

@@ -18,7 +18,7 @@ Most iA questions can be answered with a single well-chosen tool. Before calling
 | User Intent | Single Best Tool | Returns |
 |-------------|------------------|---------|
 | "What uses X?" | `ia_find_object_usages` | Referencing objects with library, usage type, file usage |
-| "Impact of field change?" | `ia_field_impact` | Affected programs + usage type |
+| "Impact of field change?" | `ia_field_impact` | Affected programs + impact_type (NEEDS_CHANGE / NEEDS_RECOMPILE) + field metadata |
 | "LFs/views over file X?" | `ia_file_dependencies` | All dependent logical files, indexes, views |
 | "Tell me about program X" | `ia_program_detail` (section=*ALL) | Calls, files, subs, vars, overrides — ALL in one query |
 | "Call tree for X?" | `ia_call_hierarchy` | Callers + callees |
@@ -93,10 +93,17 @@ FETCH FIRST 10000 ROWS ONLY
 
 **DO chain** when you see `*SRVPGM` in results — service programs are amplifiers; check what binds to them.
 
-**DO chain for field impact:** Logical files and views built over a physical file **propagate field changes** to all programs using those LFs. When analyzing field changes, always ask the user if they want the full blast radius including LF-dependent programs:
-1. `ia_field_impact` → direct references to the PF
-2. `ia_file_dependencies` → LFs/views over the PF
-3. `ia_find_object_usages` on each LF → programs using those LFs
+**DO auto-chain for field impact (run all 3 steps, then synthesize into one response):**
+1. `ia_field_impact(file_name=X, field_name=Y)` → direct references to the PF (*PGM, *SRVPGM, *DSPF, *FILE); classified as NEEDS_CHANGE / NEEDS_RECOMPILE / STRUCTURAL
+2. `ia_file_dependencies(file_name=X)` → LFs / indexes / views over the PF (STRUCTURAL impacts). If none found, stop here.
+3. `ia_find_object_usages(object_name=<each_LF>)` [run in parallel for multiple LFs] → programs/objects using those LFs
+
+Present as one response grouped by object_type with three sections:
+- **Directly references PF:** NEEDS_CHANGE / NEEDS_RECOMPILE / STRUCTURAL from step 1
+- **Logical files over PF:** STRUCTURAL from step 2 (must be rebuilt if field changes)
+- **Programs via LF:** NEEDS_CHANGE / NEEDS_RECOMPILE from step 3
+
+**impact_type notes:** `*SRVPGM` always shows NEEDS_RECOMPILE (source member name unreliable for search). CL programs now correctly checked via IAQCLSRC — those with the field in source show NEEDS_CHANGE. `STRUCTURAL` means rebuild/recreate, not just recompile.
 
 **DON'T chain** for:
 - Simple counts (just count your results)

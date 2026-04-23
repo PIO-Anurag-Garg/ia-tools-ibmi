@@ -51,16 +51,34 @@ FETCH FIRST 200 ROWS ONLY
 ```
 
 ### #4 Field Impact (blast radius of changing a field)
-**→ Use `ia_field_impact`**
+**→ Use `ia_field_impact`** — returns `impact_type`: NEEDS_CHANGE (field in RPG or CL source), NEEDS_RECOMPILE (implicit access or *SRVPGM), STRUCTURAL (*FILE/*DSPF structural dependency)
+**→ For full blast radius, also call `ia_file_dependencies` + `ia_find_object_usages` per LF (see QF-1)**
 ```sql
 SELECT DISTINCT ref.OBJECT_NAME AS affected_object, ref.OBJECT_TYPE,
   ref.OBJECT_ATTR, ref.MAPED_FROM AS reference_type,
-  fld.FIELD_DATA_TYPE AS field_type, fld.FIELD_USE_MODE AS field_usage
+  fld.FIELD_DATA_TYPE AS field_type, fld.FIELD_LENGTH, fld.FIELD_DEC_POS,
+  CASE
+    WHEN ref.OBJECT_TYPE IN ('*FILE', '*DSPF') THEN 'STRUCTURAL'
+    WHEN ref.OBJECT_TYPE = '*SRVPGM'           THEN 'NEEDS_RECOMPILE'
+    WHEN src_rpg.MEMBER_NAME IS NOT NULL        THEN 'NEEDS_CHANGE'
+    WHEN src_cl.MEMBER_NAME  IS NOT NULL        THEN 'NEEDS_CHANGE'
+    ELSE 'NEEDS_RECOMPILE'
+  END AS impact_type
 FROM ${IA_LIBRARY}.IAALLREFPF ref
 LEFT JOIN ${IA_LIBRARY}.IAFILEDTL fld
-  ON fld.MEMBER_NAME = ref.OBJECT_NAME AND fld.FIELD_NAME_INTERNAL = '<FIELD_NAME>'
+  ON fld.FILE_NAME = '<FILE_NAME>' AND fld.FIELD_NAME_INTERNAL = '<FIELD_NAME>'
+LEFT JOIN (
+  SELECT DISTINCT MEMBER_NAME FROM ${IA_LIBRARY}.IAQRPGSRC
+  WHERE SOURCE_DATA LIKE '%<FIELD_NAME>%'
+) src_rpg ON src_rpg.MEMBER_NAME = ref.OBJECT_NAME
+  AND ref.OBJECT_ATTR IN ('RPGLE', 'SQLRPGLE', 'RPG', 'RPG38', 'RPGII', 'RPGILE')
+LEFT JOIN (
+  SELECT DISTINCT MEMBER_NAME FROM ${IA_LIBRARY}.IAQCLSRC
+  WHERE SOURCE_DATA LIKE '%<FIELD_NAME>%'
+) src_cl ON src_cl.MEMBER_NAME = ref.OBJECT_NAME
+  AND ref.OBJECT_ATTR IN ('CLLE', 'CLE', 'CL', 'CL38')
 WHERE ref.REFERENCED_OBJ = '<FILE_NAME>'
-ORDER BY ref.OBJECT_TYPE, ref.OBJECT_NAME
+ORDER BY impact_type, ref.OBJECT_TYPE, ref.OBJECT_NAME
 FETCH FIRST 500 ROWS ONLY
 ```
 
