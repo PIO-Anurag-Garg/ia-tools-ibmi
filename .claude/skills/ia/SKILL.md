@@ -93,17 +93,21 @@ FETCH FIRST 10000 ROWS ONLY
 
 **DO chain** when you see `*SRVPGM` in results — service programs are amplifiers; check what binds to them.
 
-**DO auto-chain for field impact (run all 3 steps, then synthesize into one response):**
+**DO auto-chain for field impact (run all steps, then synthesize into one response):**
 1. `ia_file_field_impact_analysis(file_name=X, field_name=Y)` → direct references to the PF (*PGM, *SRVPGM, *DSPF, *FILE); classified as NEEDS_CHANGE / NEEDS_RECOMPILE / STRUCTURAL
-2. `ia_file_dependencies(file_name=X)` → LFs / indexes / views over the PF (STRUCTURAL impacts). If none found, stop here.
-3. `ia_find_object_usages(object_name=<each_LF>)` [run in parallel for multiple LFs] → programs/objects using those LFs
+2. `ia_file_dependencies(file_name=X)` → LFs / indexes / views over the PF
+3. **Always** run `ia_find_object_usages` on every STRUCTURAL `*FILE` from step 1 (e.g., a PF that inherits the field via DDS `REF`) — programs using that file need recompile too
+4. `ia_find_object_usages(object_name=<each_LF>)` [run in parallel for multiple LFs] → programs using LFs from step 2
 
-Present as one response grouped by object_type with three sections:
-- **Directly references PF:** NEEDS_CHANGE / NEEDS_RECOMPILE / STRUCTURAL from step 1
-- **Logical files over PF:** STRUCTURAL from step 2 (must be rebuilt if field changes)
-- **Programs via LF:** NEEDS_CHANGE / NEEDS_RECOMPILE from step 3
+Steps 3 and 4 can run in parallel. Skip a step only if there are no objects to look up (no STRUCTURAL files, no LFs).
 
-**impact_type notes:** `*SRVPGM` always shows NEEDS_RECOMPILE (source member name unreliable for search). CL programs now correctly checked via IAQCLSRC — those with the field in source show NEEDS_CHANGE. `STRUCTURAL` means rebuild/recreate, not just recompile.
+Present as one response with four sections:
+- **Directly references PF:** NEEDS_CHANGE / NEEDS_RECOMPILE from step 1 (*PGM, *SRVPGM)
+- **Structural dependents (rebuild required):** STRUCTURAL *FILE/*DSPF from step 1 + LFs from step 2
+- **Programs via STRUCTURAL files:** NEEDS_RECOMPILE from step 3 (deduplicate against step 1 list)
+- **Programs via LF:** NEEDS_CHANGE / NEEDS_RECOMPILE from step 4
+
+**impact_type notes:** `*SRVPGM` always shows NEEDS_RECOMPILE (source member name unreliable for search). CL programs now correctly checked via IAQCLSRC — those with the field in source show NEEDS_CHANGE. `STRUCTURAL` means rebuild/recreate, not just recompile. A STRUCTURAL `*FILE` is itself a blast-radius amplifier — always chase its dependents.
 
 **DON'T chain** for:
 - Simple counts (just count your results)
@@ -279,6 +283,7 @@ Present as one response grouped by object_type with three sections:
 - **`*SRVPGM`** in results = amplifier — always check what depends on it next (chain `ia_find_object_usages` or `ia_reference_count`)
 - **`*DSPF`** = user-facing screen impact — flag prominently
 - **Empty results** are suspicious — object may be invoked by job scheduler or external system
+- **Empty results with a user-specified library filter** — do NOT silently retry without the filter. Report the negative result explicitly ("IASRV01SV was not found as a referenced object in IAOBJDEV") then ask: "It exists in library X — would you like to see references there instead?" The user may have intentionally scoped to that library (e.g., verifying no cross-library coupling).
 - Always: **summarize by object type**, count references, state risk level, suggest a concrete next step
 
 ### `REFERENCE_SOURCE` column (`ia_find_object_usages`, `IAALLREFPF`)
@@ -301,6 +306,76 @@ Present as one response grouped by object_type with three sections:
 
 Populated only for `*FILE` references; blank for other object types (e.g., `*SRVPGM`, `*MODULE`).
 Indicates how the program uses the file (input, output, update, etc.).
+
+## Response Formatting
+
+**Always use tables** when presenting lists of objects, programs, dependencies, or analysis results. Tables are clearer than bullet lists and make patterns visible.
+
+### When to Tabulate
+
+- **Impact analysis results** — Group affected programs by NEEDS_CHANGE / NEEDS_RECOMPILE / STRUCTURAL (each group in its own table)
+- **Where-used results** — Table with columns: Object | Library | Type | Usage/Impact
+- **Call hierarchy** — Table with columns: Caller | Called | Call Type
+- **File/field dependencies** — Table showing the chain: File → Dependent File → Programs
+- **Source inventory** — Table with columns: Member | Library | Type | Lines | Complexity
+- **Lifecycle/usage data** — Table with dates, usage counts, size metrics
+- **Multi-step analysis results** — Synthesize into 2-4 focused tables, one per result category
+
+### Table Structure
+
+**Key principle:** Each table should focus on one category of results (e.g., "NEEDS_CHANGE programs", "STRUCTURAL dependents", "Programs via LF").
+
+Typical columns by analysis type:
+
+| Analysis Type | Key Columns |
+|---------------|------------|
+| Program impact | Program \| Library \| Type \| Status/Impact |
+| File dependencies | File \| Library \| Dependent \| Type \| Reason |
+| Call hierarchy | Caller \| Called \| Call Count \| Type |
+| Where-used | Object \| Type \| Library \| Referenced By \| Usage |
+| Complexity metrics | Member \| Lines \| Cyclomatic \| Dead Code \| Risk |
+| Batch jobs | CL Program \| Job Queue \| Job Desc \| Hold Status |
+
+**Deduplication:** When a program appears in multiple categories (e.g., CITY41 in both NEEDS_CHANGE and "Programs via LF"), use a footnote or note in the table row (e.g., "*Also in NEEDS_CHANGE list") rather than repeating the full row.
+
+### Example: Field Impact Analysis Response
+
+```
+Field: CUID in CUSTDATA (ZONED, 6 digits, 0 decimals)
+
+### Direct References — NEEDS_CHANGE
+| Program | Library | Type | Status |
+|---------|---------|------|--------|
+| CITY9 | AIDEMOLIB | RPGLE | Source edit required |
+| CITY17 | AIDEMOLIB | RPGLE | Source edit required |
+
+### Direct References — NEEDS_RECOMPILE
+| Program | Library | Type | Status |
+|---------|---------|------|--------|
+| CITY11 | AIDEMOLIB | RPGLE | Recompile only |
+| CITY28 | AIDEMOLIB | RPGLE | Recompile only |
+
+### Via ORDDATA File (structural dependency)
+| Program | Uses File | Library | Type | Impact |
+|---------|-----------|---------|------|--------|
+| CITY39 | ORDDATA | AIDEMOLIB | RPGLE | Indirect rebuild |
+
+### Action Items
+| Task | Objects | Action |
+|------|---------|--------|
+| Review & Edit | CITY9, CITY17... | Verify compatibility |
+| Recompile | All 17 programs | Required |
+```
+
+**Never use bullet lists for:**
+- Multiple programs, files, or objects (use table)
+- Comparative data (use table to show structure)
+- Results with 3+ attributes per item (use table to avoid cramping)
+
+**OK for bullets:**
+- Single conceptual items ("Goals:", "Why:", "Notes:")
+- Short action statements (3-4 bullets max)
+- Explanatory context (not data)
 
 ## References
 

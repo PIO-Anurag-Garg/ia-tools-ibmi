@@ -11,3 +11,4 @@ archive/
 docs/
 .bob/
 mcp.db*
+DEPLOYMENT_GUIDE.md
