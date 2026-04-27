@@ -226,6 +226,11 @@ tools:
         required: true
         minLength: 1
         maxLength: 10
+      - name: library
+        type: string
+        description: "Filter by library name (optional, default: *ALL)"
+        required: false
+        default: "*ALL"
       - name: limit
         type: integer
         description: "Max results (default: 500)"
@@ -235,6 +240,7 @@ tools:
         max: 5000
     statement: |
       SELECT
+        IAV_LIB AS library,
         IAV_VAR AS variable_name,
         IAV_TYP AS variable_type,
         IAV_DTYP AS data_type,
@@ -243,7 +249,8 @@ tools:
         IAV_DIM AS array_dimension
       FROM ${IA_LIBRARY}.IAPGMVARS
       WHERE IAV_MBR = :member_name
-      ORDER BY IAV_VAR
+        AND (:library = '*ALL' OR IAV_LIB = :library)
+      ORDER BY IAV_LIB, IAV_VAR
       FETCH FIRST :limit ROWS ONLY
 
   # ── 5. Data Structures — DS definitions with subfields ──────────────────
@@ -265,6 +272,11 @@ tools:
         required: true
         minLength: 1
         maxLength: 10
+      - name: library
+        type: string
+        description: "Filter by library name (optional, default: *ALL)"
+        required: false
+        default: "*ALL"
       - name: limit
         type: integer
         description: "Max results (default: 500)"
@@ -274,6 +286,7 @@ tools:
         max: 5000
     statement: |
       SELECT
+        LIBRARY_NAME AS library,
         DATASTR_NAME AS ds_name,
         DATASTR_TYPE AS ds_type,
         DS_FLD_NAME AS field_name,
@@ -285,7 +298,8 @@ tools:
         DS_QUALFLG AS qualified_flag
       FROM ${IA_LIBRARY}.IAPGMDS
       WHERE MEMBER_NAME = :member_name
-      ORDER BY DATASTR_NAME, DS_FLD_RANK
+        AND (:library = '*ALL' OR LIBRARY_NAME = :library)
+      ORDER BY LIBRARY_NAME, DATASTR_NAME, DS_FLD_RANK
       FETCH FIRST :limit ROWS ONLY
 
   # ── 6. Call Parameters — parameters passed to external calls ────────────
@@ -305,6 +319,11 @@ tools:
         required: true
         minLength: 1
         maxLength: 10
+      - name: library
+        type: string
+        description: "Filter by library name (optional, default: *ALL)"
+        required: false
+        default: "*ALL"
       - name: limit
         type: integer
         description: "Max results (default: 500)"
@@ -314,6 +333,7 @@ tools:
         max: 5000
     statement: |
       SELECT
+        MBR_LIB AS library,
         CALLED_OBJECT AS called_program,
         PARM_NAME AS parameter_name,
         PARM_TYPE AS parameter_type,
@@ -321,7 +341,8 @@ tools:
         CALL_SEQ AS call_sequence
       FROM ${IA_LIBRARY}.IACALLPARM
       WHERE MBR_NAME = :member_name
-      ORDER BY CALLED_OBJECT, CALL_SEQ
+        AND (:library = '*ALL' OR MBR_LIB = :library)
+      ORDER BY MBR_LIB, CALLED_OBJECT, CALL_SEQ
       FETCH FIRST :limit ROWS ONLY
 
   # ── 7. Subroutines — BEGSR/ENDSR details with usage counts ─────────────
@@ -525,12 +546,26 @@ tools:
         required: true
         minLength: 1
         maxLength: 10
+      - name: library
+        type: string
+        description: "Filter by library name (optional, default: *ALL)"
+        required: false
+        default: "*ALL"
+      - name: limit
+        type: integer
+        description: "Max results (default: 100)"
+        required: false
+        default: 100
+        min: 1
+        max: 1000
     statement: |
       SELECT
-        PGM_NAME, MOD_NAME, SRC_FILE, SRC_MBR,
+        PGM_NAME, PGM_LIB, MOD_NAME, SRC_FILE, SRC_MBR,
         MOD_ATTRIB, SRC_UPDDATE
       FROM ${IA_LIBRARY}.IAPGMINF
-      WHERE PGM_NAME = :program_name OR MOD_NAME = :program_name
+      WHERE (PGM_NAME = :program_name OR MOD_NAME = :program_name)
+        AND (:library = '*ALL' OR PGM_LIB = :library)
+      FETCH FIRST :limit ROWS ONLY
 
   # ── 12. Program Summary — quick program overview ──────────────────────────
   ia_program_summary:
@@ -840,10 +875,18 @@ tools:
     description: >
       Get the iA repository configuration settings (IFS locations, scan options, etc.).
       Queries REPO_CONFIGURATION.
-    parameters: []
+    parameters:
+      - name: limit
+        type: integer
+        description: "Max results (default: 200)"
+        required: false
+        default: 200
+        min: 1
+        max: 1000
     statement: |
       SELECT KEY_NAME1, KEY_VALUE1
       FROM ${IA_LIBRARY}.REPO_CONFIGURATION
+      FETCH FIRST :limit ROWS ONLY
 
   # ── 19. Exception Log — parser error log ──────────────────────────────────
   ia_exception_log:
@@ -925,6 +968,7 @@ tools:
       WHERE REFERENCED_OBJ = :object_name
       GROUP BY REFERENCED_OBJ, OBJECT_TYPE
       ORDER BY reference_count DESC
+      FETCH FIRST 100 ROWS ONLY
 
   # ── 22. Unused Objects — dead code candidates ─────────────────────────────
   ia_unused_objects:
@@ -964,7 +1008,14 @@ tools:
     description: >
       Detect circular dependencies — programs that call each other directly
       or indirectly. These create maintenance risks and can cause infinite loops.
-    parameters: []
+    parameters:
+      - name: limit
+        type: integer
+        description: "Max results (default: 500)"
+        required: false
+        default: 500
+        min: 1
+        max: 5000
     statement: |
       SELECT DISTINCT
         a.MBR_NAME AS program_a,
@@ -975,6 +1026,7 @@ tools:
         ON a.CALLED_OBJCT = b.MBR_NAME
         AND b.CALLED_OBJCT = a.MBR_NAME
       ORDER BY program_a
+      FETCH FIRST :limit ROWS ONLY
 
   # ── 24. Override Chain — chained OVRDBF dependencies ─────────────────────
   ia_override_chain:
@@ -986,7 +1038,14 @@ tools:
       Find all file override chains — cases where file A is overridden to file B,
       which may itself be overridden to file C. These chains create hidden
       dependencies that are critical to understand.
-    parameters: []
+    parameters:
+      - name: limit
+        type: integer
+        description: "Max results (default: 500)"
+        required: false
+        default: 500
+        min: 1
+        max: 5000
     statement: |
       SELECT
         a.IOVR_MBR AS member,
@@ -999,6 +1058,7 @@ tools:
         ON a.IOVR_TO = b.IOVR_FROM
         AND a.IOVR_MBR = b.IOVR_MBR
       ORDER BY a.IOVR_MBR, a.IOVR_FROM
+      FETCH FIRST :limit ROWS ONLY
 
   # ── 25. Object Lifecycle — creation, change, and last-used dates ─────────
   ia_object_lifecycle:
@@ -1378,7 +1438,7 @@ tools:
     parameters:
       - name: procedure_name
         type: string
-        description: "Procedure name to analyze"
+        description: "Procedure name to analyze. Supports % wildcards (e.g., PROCESS%)."
         required: true
         minLength: 1
         maxLength: 256
@@ -1404,7 +1464,7 @@ tools:
         REFERENCED_OBJECT_NAME AS target_object,
         REFERENCED_PROCEDURE_NAME AS target_procedure
       FROM ${IA_LIBRARY}.PROCEDURE_REFERENCE_DETAIL
-      WHERE REFERENCED_PROCEDURE_NAME = :procedure_name
+      WHERE RTRIM(REFERENCED_PROCEDURE_NAME) LIKE :procedure_name
         AND :direction IN ('CALLERS', 'BOTH')
       UNION ALL
       SELECT
@@ -1416,7 +1476,7 @@ tools:
         REFERENCED_OBJECT_NAME AS target_object,
         REFERENCED_PROCEDURE_NAME AS target_procedure
       FROM ${IA_LIBRARY}.PROCEDURE_REFERENCE_DETAIL
-      WHERE PROCEDURE_NAME = :procedure_name
+      WHERE RTRIM(PROCEDURE_NAME) LIKE :procedure_name
         AND :direction IN ('CALLEES', 'BOTH')
       ORDER BY direction, caller_object
       FETCH FIRST :limit ROWS ONLY
