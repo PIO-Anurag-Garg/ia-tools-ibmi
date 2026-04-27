@@ -342,6 +342,11 @@ tools:
         required: true
         minLength: 1
         maxLength: 10
+      - name: library
+        type: string
+        description: "Filter by library name (optional, default: *ALL)"
+        required: false
+        default: "*ALL"
       - name: limit
         type: integer
         description: "Max results (default: 200)"
@@ -351,6 +356,7 @@ tools:
         max: 5000
     statement: |
       SELECT
+        MBR_LIB AS library,
         SR_SBR_NAME AS subroutine_name,
         SR_OPCODE AS opcode,
         SR_CNT AS usage_count,
@@ -358,7 +364,8 @@ tools:
       FROM ${IA_LIBRARY}.IASUBRDTL
       WHERE MBR_NAME = :member_name
         AND SR_OPCODE = 'BEGSR'
-      ORDER BY SR_SBR_NAME
+        AND (:library = '*ALL' OR MBR_LIB = :library)
+      ORDER BY MBR_LIB, SR_SBR_NAME
       FETCH FIRST :limit ROWS ONLY
 
   # ── 8. File Overrides — OVRDBF statements (file routing) ───────────────
@@ -1476,7 +1483,7 @@ tools:
     parameters:
       - name: procedure_name
         type: string
-        description: "Procedure name to look up"
+        description: "Procedure name to look up. Supports % wildcards (e.g., PROCESS% or %ORDER%)."
         required: true
         minLength: 1
         maxLength: 256
@@ -1510,7 +1517,7 @@ tools:
         PARM_DEC_POS AS decimal_positions,
         KEYWORDS
       FROM ${IA_LIBRARY}.IAPRCPARM
-      WHERE PROCEDURE_NAME = :procedure_name
+      WHERE RTRIM(PROCEDURE_NAME) LIKE :procedure_name
         AND (:member_name = '*ALL' OR MEMBER_NAME = :member_name)
         AND (:library = '*ALL' OR LIBRARY_NAME = :library)
       ORDER BY LIBRARY_NAME, MEMBER_NAME, PR_PI_FLAG, PARAMETER_SEQ
@@ -1541,7 +1548,12 @@ tools:
         default: "*ALL"
       - name: opcode
         type: string
-        description: "Filter by opcode: *ALL, DCL-DS, DCLVAR, EVAL, etc. (default: *ALL)"
+        description: "Filter by opcode: *ALL, DCL-DS, DCLVAR, = (assignment), SQLEXC, CLEAR, RETURN, etc. (default: *ALL)"
+        required: false
+        default: "*ALL"
+      - name: library
+        type: string
+        description: "Filter by library name (optional, default: *ALL)"
         required: false
         default: "*ALL"
       - name: limit
@@ -1553,6 +1565,7 @@ tools:
         max: 5000
     statement: |
       SELECT
+        LIBRARY_NAME AS library,
         MEMBER_NAME,
         OPCODE_NAME AS opcode,
         FACTOR1_VAL AS factor1,
@@ -1566,7 +1579,8 @@ tools:
              OR FACTOR2_VAL = :variable_name
              OR RESULT_VAL = :variable_name)
         AND (:opcode = '*ALL' OR OPCODE_NAME = :opcode)
-      ORDER BY MEMBER_NAME
+        AND (:library = '*ALL' OR LIBRARY_NAME = :library)
+      ORDER BY LIBRARY_NAME, MEMBER_NAME
       FETCH FIRST :limit ROWS ONLY
 
   # ── 37. Key List Usage — KLIST/KFLD definitions ──────────────────────────
