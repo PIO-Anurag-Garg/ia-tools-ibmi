@@ -1,5 +1,5 @@
 # Impact Analysis (iA) Tools for IBM i
-# Source: programmers.io ia-mcp-server — 44 tools for code impact analysis
+# Source: programmers.io ia-mcp-server — 47 tools for code impact analysis
 # These tools query the iA repository tables (pre-parsed IBM i source metadata).
 #
 # IMPORTANT: The library is configured via the IA_LIBRARY environment variable.
@@ -959,6 +959,13 @@ tools:
         required: true
         minLength: 1
         maxLength: 10
+      - name: limit
+        type: integer
+        description: "Max results (default: 100)"
+        required: false
+        default: 100
+        min: 1
+        max: 1000
     statement: |
       SELECT
         REFERENCED_OBJ AS object_name,
@@ -968,7 +975,7 @@ tools:
       WHERE REFERENCED_OBJ = :object_name
       GROUP BY REFERENCED_OBJ, OBJECT_TYPE
       ORDER BY reference_count DESC
-      FETCH FIRST 100 ROWS ONLY
+      FETCH FIRST :limit ROWS ONLY
 
   # ── 22. Unused Objects — dead code candidates ─────────────────────────────
   ia_unused_objects:
@@ -985,6 +992,13 @@ tools:
         description: "Filter by type (*ALL, *PGM, *SRVPGM, *FILE)"
         required: false
         default: "*ALL"
+      - name: limit
+        type: integer
+        description: "Max results (default: 500)"
+        required: false
+        default: 500
+        min: 1
+        max: 5000
     statement: |
       SELECT
         od.OBJECT_NAME,
@@ -997,7 +1011,7 @@ tools:
       WHERE ref.REFERENCED_OBJ IS NULL
         AND (:object_type = '*ALL' OR od.OBJECT_TYPE = :object_type)
       ORDER BY od.OBJECT_TYPE, od.OBJECT_NAME
-      FETCH FIRST 500 ROWS ONLY
+      FETCH FIRST :limit ROWS ONLY
 
   # ── 23. Circular Dependencies — detect circular call chains ──────────────
   ia_circular_deps:
@@ -1591,7 +1605,7 @@ tools:
     maxDisplayRows: 1000
     description: >
       Find all operations involving a variable — declarations (DCL-DS, DCLVAR),
-      assignments (EVAL), comparisons, and BIF usage. Useful for tracing data
+      assignments (= operator), comparisons, and BIF usage. Useful for tracing data
       flow and understanding how a variable is used throughout a program.
       Queries IAVARREL.
     parameters:
