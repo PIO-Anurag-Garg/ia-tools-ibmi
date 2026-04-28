@@ -18,7 +18,6 @@ body:
         - ia_file_overrides
         - ia_file_fields
         - ia_object_list
-        - ia_program_info
         - ia_program_summary
         - ia_program_detail
         - ia_source_code

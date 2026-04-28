@@ -87,6 +87,9 @@ tools:
       Generate the call tree for a program — who calls it (CALLERS), what it calls
       (CALLEES), or both. Includes procedure-level detail and call sequence numbers.
       Queries IAPGMCALLS — captures CALL, CALLP, and bound module references.
+      For CALLERS direction, searches both CALLED_OBJCT (program-level calls) and
+      CALLED_PROC (procedure-level calls) — use this to find callers of a procedure
+      like IAEXCTIMR that is stored in CALLED_PROC rather than CALLED_OBJCT.
     parameters:
       - name: program_name
         type: string
@@ -126,7 +129,7 @@ tools:
         CALLED_PROC AS called_procedure,
         CALL_SEQ AS call_sequence
       FROM ${IA_LIBRARY}.IAPGMCALLS
-      WHERE CALLED_OBJCT = :program_name
+      WHERE (CALLED_OBJCT = :program_name OR CALLED_PROC = :program_name)
         AND :direction IN ('CALLERS', 'BOTH')
       ORDER BY direction, call_sequence
       FETCH FIRST :limit ROWS ONLY
@@ -246,7 +249,8 @@ tools:
         IAV_DTYP AS data_type,
         IAV_LEN AS field_length,
         IAV_DEC AS decimal_positions,
-        IAV_DIM AS array_dimension
+        IAV_DIM AS array_dimension,
+        IAV_KWVAL AS constant_value
       FROM ${IA_LIBRARY}.IAPGMVARS
       WHERE IAV_MBR = :member_name
         AND (:library = '*ALL' OR IAV_LIB = :library)
@@ -532,43 +536,6 @@ tools:
       ORDER BY OBJECT_TYPE, OBJECT_ATTRIBUTE, OBJECT_NAME
       FETCH FIRST :limit ROWS ONLY
 
-  # ── 11. Program Info — program/module metadata ──────────────────────────
-  ia_program_info:
-    name: ia-program-info
-    source: ibmi
-    fetchAllRows: true
-    maxDisplayRows: 1000
-    description: >
-      Get detailed metadata for a program or module: source file, member,
-      attributes, and last change date. Queries IAPGMINF.
-    parameters:
-      - name: program_name
-        type: string
-        description: "Program or module name"
-        required: true
-        minLength: 1
-        maxLength: 10
-      - name: library
-        type: string
-        description: "Filter by library name (optional, default: *ALL)"
-        required: false
-        default: "*ALL"
-      - name: limit
-        type: integer
-        description: "Max results (default: 100)"
-        required: false
-        default: 100
-        min: 1
-        max: 1000
-    statement: |
-      SELECT
-        PGM_NAME, PGM_LIB, MOD_NAME, SRC_FILE, SRC_MBR,
-        MOD_ATTRIB, SRC_UPDDATE
-      FROM ${IA_LIBRARY}.IAPGMINF
-      WHERE (PGM_NAME = :program_name OR MOD_NAME = :program_name)
-        AND (:library = '*ALL' OR PGM_LIB = :library)
-      FETCH FIRST :limit ROWS ONLY
-
   # ── 12. Program Summary — quick program overview ──────────────────────────
   ia_program_summary:
     name: ia-program-summary
@@ -577,8 +544,8 @@ tools:
     maxDisplayRows: 1000
     description: >
       Quick overview of a program — metadata, compile info, and complexity metrics.
-      Provides a concise summary in a single query. Queries IAPGMINF, IA_CODE_INFO,
-      and IASRCMBRID.
+      Provides a concise summary in a single query. Supersedes ia_program_info.
+      Queries IAPGMINF, IA_CODE_INFO, and IASRCMBRID.
     parameters:
       - name: program_name
         type: string
@@ -586,6 +553,11 @@ tools:
         required: true
         minLength: 1
         maxLength: 10
+      - name: library
+        type: string
+        description: "Filter by library name (optional, default: *ALL)"
+        required: false
+        default: "*ALL"
       - name: limit
         type: integer
         description: "Max results (default: 100)"
@@ -623,8 +595,8 @@ tools:
         ON c.MEMBER_NAME = i.SRC_MBR
       LEFT JOIN ${IA_LIBRARY}.IASRCMBRID m
         ON m.MEMBER_NAME = i.SRC_MBR
-      WHERE i.PGM_NAME = :program_name
-        OR i.MOD_NAME = :program_name
+      WHERE (i.PGM_NAME = :program_name OR i.MOD_NAME = :program_name)
+        AND (:library = '*ALL' OR i.PGM_LIB = :library)
       ORDER BY i.MOD_TYP, i.MOD_NAME
       FETCH FIRST :limit ROWS ONLY
 
@@ -2098,6 +2070,7 @@ tools:
       Inverse of ia_find_object_usages: shows what an object depends ON rather than
       what depends on IT. Use cases: modules bound into *PGM/*SRVPGM,
       service programs in a *BNDDIR, files used by a program, etc.
+      Use object_type to disambiguate when the same name exists as *PGM and *SRVPGM.
       Queries the iA IAALLREFPF cross-reference table.
     parameters:
       - name: object_name
@@ -2106,6 +2079,11 @@ tools:
         required: true
         minLength: 1
         maxLength: 10
+      - name: object_type
+        type: string
+        description: "Filter source object by type: *ALL, *PGM, *SRVPGM, *MODULE, *FILE, *BNDDIR (default: *ALL)"
+        required: false
+        default: "*ALL"
       - name: referenced_type
         type: string
         description: "Filter referenced objects by type: *ALL, *MODULE, *SRVPGM, *FILE, *PGM, *BNDDIR, *DTAARA (default: *ALL)"
@@ -2131,6 +2109,7 @@ tools:
         MAPED_FROM AS reference_source
       FROM ${IA_LIBRARY}.IAALLREFPF
       WHERE OBJECT_NAME = :object_name
+        AND (:object_type = '*ALL' OR OBJECT_TYPE = :object_type)
         AND (:referenced_type = '*ALL' OR REFERENCED_OBJTYP = :referenced_type)
       ORDER BY REFERENCED_OBJTYP, REFERENCED_OBJ
       FETCH FIRST :limit ROWS ONLY

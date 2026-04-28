@@ -185,7 +185,7 @@ FETCH FIRST 500 ROWS ONLY
 ```
 
 ### #14 Program Compile Status (source vs compile date)
-**→ `ia_program_info` returns the core metadata; use this SQL for the full compile comparison**
+**→ `ia_program_summary` returns the core metadata; use this SQL for the full compile comparison**
 ```sql
 SELECT PGM_NAME, PGM_LIB, PGM_TYP, MOD_NAME, MOD_ATTRIB,
   SRC_FILE, SRC_LIB, SRC_MBR, MOD_CRTDATE, SRC_UPDDATE, TGT_RLS
