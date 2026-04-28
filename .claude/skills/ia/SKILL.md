@@ -137,7 +137,7 @@ Present as one response with four sections:
 | `ia_object_lookup` | Resolve an object name → type, library, attribute (wildcard with `%`) |
 | `ia_member_lookup` | Source member metadata and existence check (file, library, type, timestamps) |
 | `ia_object_list` | Inventory objects by type (`*PGM`, `*SRVPGM`, `*FILE`, ...) |
-| `ia_program_info` | Program/module metadata: source file, member, attribs, last change |
+| `ia_program_summary` | Program overview: metadata, compile info, complexity metrics, library filter |
 | `ia_dashboard` | Repo health summary: categories, line counts, library map |
 | `ia_repo_config` | iA repository configuration settings |
 
@@ -231,7 +231,7 @@ Present as one response with four sections:
 | What type/library is object X? | `ia_object_lookup` | [#6](references/sql-patterns.md) |
 | Does member X exist? Metadata? | `ia_member_lookup` | — |
 | Inventory of objects by type? | `ia_object_list` | — |
-| Program metadata / compile info? | `ia_program_info` | [#14](references/sql-patterns.md) |
+| Program metadata / compile info? | `ia_program_summary` | [#14](references/sql-patterns.md) |
 | Lifecycle / last-used dates? | `ia_object_lifecycle` | — |
 | Object size / largest or unused objects? | `ia_obj_size` | — |
 | Dead code (compiled)? | `ia_unused_objects` | [#15](references/sql-patterns.md) |
