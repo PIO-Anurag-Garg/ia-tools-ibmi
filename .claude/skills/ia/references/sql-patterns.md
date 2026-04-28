@@ -108,12 +108,12 @@ FETCH FIRST 200 ROWS ONLY
 ```
 
 ### #7 List Library Files
-**→ Use `ia_library_files`**
+**→ Use `ia_library_files`** — defaults to configured `IA_LIBRARY`; pass `library=#AIDEMO` to query any other library including `#` names
 ```sql
 SELECT TABLE_NAME AS file_name, TABLE_TYPE AS file_type,
   TABLE_TEXT AS description, LAST_ALTERED_TIMESTAMP AS last_altered
 FROM QSYS2.SYSTABLES
-WHERE TABLE_SCHEMA = '${IA_LIBRARY}'
+WHERE TABLE_SCHEMA = CASE WHEN :library = '' THEN '${IA_LIBRARY}' ELSE UPPER(:library) END
 ORDER BY TABLE_NAME
 FETCH FIRST 500 ROWS ONLY
 ```

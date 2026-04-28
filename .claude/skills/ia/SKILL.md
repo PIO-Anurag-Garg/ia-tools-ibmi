@@ -133,7 +133,7 @@ Present as one response with four sections:
 ### Discovery — start here
 | Tool | Purpose |
 |------|---------|
-| `ia_library_files` | List every file/table in the iA repository library |
+| `ia_library_files` | List every file/table in any IBM i library (default: configured IA_LIBRARY; pass `library=#AIDEMO` to query other libraries including `#` names) |
 | `ia_object_lookup` | Resolve an object name → type, library, attribute (wildcard with `%`) |
 | `ia_member_lookup` | Source member metadata and existence check (file, library, type, timestamps) |
 | `ia_object_list` | Inventory objects by type (`*PGM`, `*SRVPGM`, `*FILE`, ...) |
@@ -201,8 +201,8 @@ Present as one response with four sections:
 | `ia_procedure_params` | Procedure PR/PI signatures; `procedure_name` supports % wildcards; filter by `member_name`, `library` |
 | `ia_cl_jobs` | CL SBMJOB/CALL detection with job queue info |
 | `ia_variable_ops` | Variable declarations, assignments, BIF usage; filter by `member_name`, `opcode`, `library` |
-| `ia_klist_usage` | KLIST/KFLD key list definitions |
-| `ia_application_area` | Scoped project areas and their objects |
+| `ia_klist_usage` | KLIST/KFLD key list definitions; filter by `kfld_name` with `%` wildcards (e.g., `DBODIV%`) |
+| `ia_application_area` | Forward: area → objects (`area_name=MYAREA`); Reverse: object → areas (`object_name=CUSTMAST`, supports `%`) |
 | `ia_sql_names` | SQL long/short name mapping |
 | `ia_program_files` | Program file usage with PREFIX/RENAME; filter by `member_name`, `library` |
 
@@ -239,7 +239,7 @@ Present as one response with four sections:
 | Complexity hotspots? | `ia_code_complexity` | — |
 | Circular call chains? | `ia_circular_deps` | — |
 | Repo health / member inventory? | `ia_dashboard` | — |
-| List tables in iA library? | `ia_library_files` | [#7](references/sql-patterns.md) |
+| List tables in iA library? | `ia_library_files` (default) or `ia_library_files(library=#AIDEMO)` for other libraries | [#7](references/sql-patterns.md) |
 | Raw RPG/CL token stream? | `ia_rpg_source_tokens`, `ia_cl_source_tokens` | — |
 | RPG source code for member X? | `ia_rpg_source` (optional `source_spec` filter) | — |
 | Members with spec type H/F/P in library X? | `ia_rpg_source` (member_name=*ALL, source_spec=H, library_name=X) | — |

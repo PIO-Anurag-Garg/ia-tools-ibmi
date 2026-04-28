@@ -226,10 +226,16 @@ Returns: Files used with PREFIX, RENAME, record format — more detailed than ia
 
 ### QF-21: "Scoped analysis by application area"
 
-**Two-query approach:**
+**Forward (area → objects):**
 ```
 1. ia_application_area(area_name="*LIST") → List all defined areas
 2. ia_application_area(area_name="MYPROJECT") → Objects in specific area
+```
+
+**Reverse (object → areas):**
+```
+ia_application_area(object_name="CUSTMAST") → All areas containing CUSTMAST
+ia_application_area(object_name="%CUST%")   → Wildcard: areas with any CUST* object
 ```
 
 ---
