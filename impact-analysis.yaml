@@ -506,6 +506,7 @@ tools:
       List all objects in the iA repository with metadata: type, attribute, library,
       source file/member, creation date, and exclusion status.
       Use to discover available objects before running impact analysis.
+      Optionally filter by library to scope results to a single library.
       Queries OBJECT_DETAILS — the master object inventory.
     parameters:
       - name: object_type
@@ -518,11 +519,17 @@ tools:
         description: "Filter by attribute: *ALL, RPGLE, CLLE, RPG, CLP, CLE, PF, LF, DSPF, PRTF (default: *ALL)"
         required: false
         default: "*ALL"
+      - name: library
+        type: string
+        description: "Filter by owning library (e.g., IAOBJDEV). Default: *ALL"
+        required: false
+        default: "*ALL"
+        maxLength: 10
       - name: limit
         type: integer
-        description: "Max results (default: 500)"
+        description: "Max results (default: 2000)"
         required: false
-        default: 500
+        default: 2000
         min: 1
         max: 5000
     statement: |
@@ -533,6 +540,7 @@ tools:
       FROM ${IA_LIBRARY}.OBJECT_DETAILS
       WHERE (:object_type = '*ALL' OR OBJECT_TYPE = :object_type)
         AND (:object_attribute = '*ALL' OR OBJECT_ATTRIBUTE = :object_attribute)
+        AND (:library = '*ALL' OR OBJECT_LIBRARY = :library)
       ORDER BY OBJECT_TYPE, OBJECT_ATTRIBUTE, OBJECT_NAME
       FETCH FIRST :limit ROWS ONLY
 
@@ -1713,7 +1721,7 @@ tools:
         ON h.APP_AREA_NAME = d.APP_AREA_NAME
         AND (:area_name != '*LIST' OR :object_name != '*ALL')
       WHERE (:area_name = '*LIST' OR h.APP_AREA_NAME = :area_name)
-        AND (:object_name = '*ALL' OR d.OBJECT_NAME LIKE :object_name)
+        AND (:object_name = '*ALL' OR TRIM(d.OBJECT_NAME) LIKE :object_name)
         AND (:object_type = '*ALL' OR d.OBJECT_TYPE = :object_type OR d.OBJECT_TYPE IS NULL)
       ORDER BY h.APP_AREA_NAME, d.OBJECT_TYPE, d.OBJECT_NAME
       FETCH FIRST :limit ROWS ONLY
