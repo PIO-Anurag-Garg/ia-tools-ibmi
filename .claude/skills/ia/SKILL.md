@@ -136,7 +136,7 @@ Present as one response with four sections:
 | `ia_library_files` | List every file/table in any IBM i library (default: configured IA_LIBRARY; pass `library=#AIDEMO` to query other libraries including `#` names) |
 | `ia_object_lookup` | Resolve an object name → type, library, attribute (wildcard with `%`) |
 | `ia_member_lookup` | Source member metadata: existence check, file/library/type, timestamps, and line counts (supersedes ia_source_code) |
-| `ia_object_list` | Inventory objects by type (`*PGM`, `*SRVPGM`, `*FILE`, ...) |
+| `ia_object_list` | Inventory objects by type (`*PGM`, `*SRVPGM`, `*FILE`, ...); optional library filter |
 | `ia_program_summary` | Program overview: metadata, compile info, complexity metrics, library filter |
 | `ia_dashboard` | Repo health summary: categories, line counts, library map |
 | `ia_repo_config` | iA repository configuration settings; IAOBJUSGDR = date usage stats last collected (freshness check for ia_obj_size / ia_unused_objects) |
@@ -255,6 +255,7 @@ Present as one response with four sections:
 | Procedure-level callers? | `ia_procedure_xref` | — |
 | Procedure signature? | `ia_procedure_params` | — |
 | Batch job detection? | `ia_cl_jobs` | — |
+| **Document program X?** | **Follow [program-documentation.md](references/program-documentation.md) — 7-step mandatory sequence** | — |
 | Anything else | Find the table in [tables.md](references/tables.md), schema via `describe_sql_object`, query via `execute_sql` |
 
 ## Parameter Rules for Dedicated Tools
@@ -380,6 +381,7 @@ Field: CUID in CUSTDATA (ZONED, 6 digits, 0 decimals)
 ## References
 
 - **Optimal tool flows for common queries** → [references/query-flows.md](references/query-flows.md) (READ FIRST)
+- **Program documentation (7-step mandatory sequence)** → [references/program-documentation.md](references/program-documentation.md)
 - **Analysis playbooks & chaining strategy** → [references/playbook.md](references/playbook.md)
 - **SQL templates** for `execute_sql` fallbacks → [references/sql-patterns.md](references/sql-patterns.md)
 - **All 35+ iA tables** catalog → [references/tables.md](references/tables.md)
@@ -464,6 +466,9 @@ Edit files in `.claude/skills/ia/`:
 - `references/playbook.md` — Analysis strategies
 - `references/sql-patterns.md` — Fallback SQL templates
 - `references/tables.md` — Table catalog
+- `references/program-documentation.md` — Program doc 7-step sequence, verification rules, common traps
+
+**Mirror rule:** After editing any file above, copy it to `.bob/skills/ia/` at the same relative path.
 
 ### Improvement Principles
 

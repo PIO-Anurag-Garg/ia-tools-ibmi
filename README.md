@@ -34,7 +34,7 @@ A token-efficient skill at `.claude/skills/ia/` that teaches AI agents how to qu
 | 7 | `ia_subroutines` | BEGSR/EXSR details with usage counts |
 | 8 | `ia_file_overrides` | OVRDBF statements (real file routing) |
 | 9 | `ia_file_fields` | Field-level metadata for a database file (names, types, lengths, key sequence, reference chain) |
-| 10 | `ia_object_list` | Repository inventory filtered by object type and attribute |
+| 10 | `ia_object_list` | Repository inventory filtered by object type, attribute, and library |
 | 11 | `ia_program_summary` | Quick program overview with compile info and complexity; supports library filter |
 | 13 | `ia_program_detail` | Deep structural analysis (calls, files, subroutines, variables) |
 | 15 | `ia_rpg_source_tokens` | Token-level RPG source analysis |
