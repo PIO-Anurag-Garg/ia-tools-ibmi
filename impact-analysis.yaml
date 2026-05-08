@@ -86,10 +86,14 @@ tools:
     description: >
       Generate the call tree for a program — who calls it (CALLERS), what it calls
       (CALLEES), or both. Includes procedure-level detail and call sequence numbers.
-      Queries IAPGMCALLS — captures CALL, CALLP, and bound module references.
-      For CALLERS direction, searches both CALLED_OBJCT (program-level calls) and
-      CALLED_PROC (procedure-level calls) — use this to find callers of a procedure
-      like IAEXCTIMR that is stored in CALLED_PROC rather than CALLED_OBJCT.
+      Primary source IAPGMCALLS (parsed CALL/CALLP/bound module references) is
+      UNIONed with a fallback over IAALLREFPF (`*PGM` ↔ `*PGM` cross-references)
+      so menu programs and dynamic CALL targets that never landed in IAPGMCALLS
+      are still surfaced. Each row carries SOURCE_TABLE so callers can tell which
+      table produced it. For CALLERS direction, searches both CALLED_OBJCT
+      (program-level calls) and CALLED_PROC (procedure-level calls) — use this to
+      find callers of a procedure like IAEXCTIMR that is stored in CALLED_PROC
+      rather than CALLED_OBJCT. Fixes #61.
     parameters:
       - name: program_name
         type: string
@@ -112,26 +116,82 @@ tools:
     statement: |
       SELECT
         'CALLEES' AS direction,
-        MBR_NAME AS source_program,
-        CALLED_OBJCT AS target_program,
-        FROM_PROC AS calling_procedure,
-        CALLED_PROC AS called_procedure,
-        CALL_SEQ AS call_sequence
+        CAST(MBR_NAME       AS VARCHAR(11)) AS source_program,
+        CAST(CALLED_OBJCT   AS VARCHAR(11)) AS target_program,
+        CAST(FROM_PROC      AS VARCHAR(128)) AS calling_procedure,
+        CAST(CALLED_PROC    AS VARCHAR(128)) AS called_procedure,
+        CAST(CALL_SEQ       AS VARCHAR(20)) AS call_sequence,
+        CAST(''             AS VARCHAR(10)) AS source_attr,
+        CAST(''             AS VARCHAR(10)) AS target_attr,
+        CAST(''             AS VARCHAR(10)) AS reference_usage,
+        CAST(''             AS VARCHAR(10)) AS reference_source,
+        CAST('IAPGMCALLS'   AS VARCHAR(15)) AS source_table
       FROM ${IA_LIBRARY}.IAPGMCALLS
       WHERE MBR_NAME = :program_name
         AND :direction IN ('CALLEES', 'BOTH')
       UNION ALL
       SELECT
         'CALLERS' AS direction,
-        MBR_NAME AS source_program,
-        CALLED_OBJCT AS target_program,
-        FROM_PROC AS calling_procedure,
-        CALLED_PROC AS called_procedure,
-        CALL_SEQ AS call_sequence
+        CAST(MBR_NAME       AS VARCHAR(11)) AS source_program,
+        CAST(CALLED_OBJCT   AS VARCHAR(11)) AS target_program,
+        CAST(FROM_PROC      AS VARCHAR(128)) AS calling_procedure,
+        CAST(CALLED_PROC    AS VARCHAR(128)) AS called_procedure,
+        CAST(CALL_SEQ       AS VARCHAR(20)) AS call_sequence,
+        CAST(''             AS VARCHAR(10)) AS source_attr,
+        CAST(''             AS VARCHAR(10)) AS target_attr,
+        CAST(''             AS VARCHAR(10)) AS reference_usage,
+        CAST(''             AS VARCHAR(10)) AS reference_source,
+        CAST('IAPGMCALLS'   AS VARCHAR(15)) AS source_table
       FROM ${IA_LIBRARY}.IAPGMCALLS
       WHERE (CALLED_OBJCT = :program_name OR CALLED_PROC = :program_name)
         AND :direction IN ('CALLERS', 'BOTH')
-      ORDER BY direction, call_sequence
+      UNION ALL
+      SELECT
+        'CALLEES' AS direction,
+        CAST(OBJECT_NAME       AS VARCHAR(11)) AS source_program,
+        CAST(REFERENCED_OBJ    AS VARCHAR(11)) AS target_program,
+        CAST(''                AS VARCHAR(128)) AS calling_procedure,
+        CAST(''                AS VARCHAR(128)) AS called_procedure,
+        CAST(''                AS VARCHAR(20)) AS call_sequence,
+        CAST(OBJECT_ATTR       AS VARCHAR(10)) AS source_attr,
+        CAST(REFERENCED_OBJATR AS VARCHAR(10)) AS target_attr,
+        CAST(REFERENCED_OBJUSG AS VARCHAR(10)) AS reference_usage,
+        CAST(MAPED_FROM        AS VARCHAR(10)) AS reference_source,
+        CAST('IAALLREFPF'      AS VARCHAR(15)) AS source_table
+      FROM ${IA_LIBRARY}.IAALLREFPF
+      WHERE OBJECT_NAME = :program_name
+        AND OBJECT_TYPE = '*PGM'
+        AND REFERENCED_OBJTYP = '*PGM'
+        AND :direction IN ('CALLEES', 'BOTH')
+        AND NOT EXISTS (
+          SELECT 1 FROM ${IA_LIBRARY}.IAPGMCALLS p
+          WHERE p.MBR_NAME = OBJECT_NAME
+            AND p.CALLED_OBJCT = REFERENCED_OBJ
+        )
+      UNION ALL
+      SELECT
+        'CALLERS' AS direction,
+        CAST(OBJECT_NAME       AS VARCHAR(11)) AS source_program,
+        CAST(REFERENCED_OBJ    AS VARCHAR(11)) AS target_program,
+        CAST(''                AS VARCHAR(128)) AS calling_procedure,
+        CAST(''                AS VARCHAR(128)) AS called_procedure,
+        CAST(''                AS VARCHAR(20)) AS call_sequence,
+        CAST(OBJECT_ATTR       AS VARCHAR(10)) AS source_attr,
+        CAST(REFERENCED_OBJATR AS VARCHAR(10)) AS target_attr,
+        CAST(REFERENCED_OBJUSG AS VARCHAR(10)) AS reference_usage,
+        CAST(MAPED_FROM        AS VARCHAR(10)) AS reference_source,
+        CAST('IAALLREFPF'      AS VARCHAR(15)) AS source_table
+      FROM ${IA_LIBRARY}.IAALLREFPF
+      WHERE REFERENCED_OBJ = :program_name
+        AND OBJECT_TYPE = '*PGM'
+        AND REFERENCED_OBJTYP = '*PGM'
+        AND :direction IN ('CALLERS', 'BOTH')
+        AND NOT EXISTS (
+          SELECT 1 FROM ${IA_LIBRARY}.IAPGMCALLS p
+          WHERE p.MBR_NAME = OBJECT_NAME
+            AND p.CALLED_OBJCT = REFERENCED_OBJ
+        )
+      ORDER BY direction, source_table, call_sequence
       FETCH FIRST :limit ROWS ONLY
 
   # ── 3. Field Impact — blast radius of changing a field ──────────────────
@@ -1232,10 +1292,15 @@ tools:
     fetchAllRows: true
     maxDisplayRows: 1000
     description: >
-      Find all logical files, indexes, and SQL views that depend on a physical file.
-      Essential for field change impact analysis — changes to a PF propagate to all
-      dependent LFs, which in turn affect programs using those LFs.
-      Queries IADSPDBR (DSPDBR output captured by iA).
+      Find all logical files, indexes, and SQL views that depend on a physical file,
+      bifurcated by their true SQL kind (DDS_LF / INDEX / VIEW / TABLE / MQT). Joins
+      IADSPDBR (DSPDBR cross-reference) with IDSPFDBASA (per-file DSPFD attributes)
+      so the SQL_OBJECT_TYPE column reflects ATSQLT (I=Index, V=View, T=Table,
+      M=MQT, 0=DDS LF), not just IADSPDBR.WHTYPE which collapses everything to
+      'DATA'. Also surfaces ATFTYP (file type), ATFATR (PF/LF), ATJOIN (join LF
+      flag), ATSELO (select/omit flag), and ATACCP (access path: A=Arrival,
+      K=Keyed, E=EVI, S=Shared). Use dependent_kind to filter to a single class
+      (e.g., INDEX, VIEW, LF). Fixes #63 + #65.
     parameters:
       - name: file_name
         type: string
@@ -1243,6 +1308,11 @@ tools:
         required: true
         minLength: 1
         maxLength: 10
+      - name: dependent_kind
+        type: string
+        description: "Filter dependents: *ALL, INDEX, VIEW, LF, TABLE, MQT, DDS_LF (default: *ALL)"
+        required: false
+        default: "*ALL"
       - name: limit
         type: integer
         description: "Max results (default: 100)"
@@ -1252,22 +1322,54 @@ tools:
         max: 1000
     statement: |
       SELECT
-        WHRFI AS base_file,
-        WHRLI AS base_library,
-        WHREFI AS dependent_file,
-        WHRELI AS dependent_library,
-        CASE WHTYPE
+        d.WHRFI  AS base_file,
+        d.WHRLI  AS base_library,
+        d.WHREFI AS dependent_file,
+        d.WHRELI AS dependent_library,
+        CASE d.WHTYPE
           WHEN 'D' THEN 'DATA'
           WHEN 'I' THEN 'INDEX'
           WHEN 'O' THEN 'ACCESS_PATH_OWNER'
           WHEN 'V' THEN 'SQL_VIEW'
           WHEN 'C' THEN 'CONSTRAINT'
-          ELSE WHTYPE
+          ELSE d.WHTYPE
         END AS dependency_type,
-        WHRTYP AS base_file_type
-      FROM ${IA_LIBRARY}.IADSPDBR
-      WHERE WHRFI = :file_name
-      ORDER BY WHREFI
+        d.WHRTYP AS base_file_type,
+        a.ATFTYP AS dependent_file_type,
+        a.ATFATR AS dependent_attr,
+        CASE a.ATSQLT
+          WHEN 'I' THEN 'INDEX'
+          WHEN 'V' THEN 'VIEW'
+          WHEN 'T' THEN 'TABLE'
+          WHEN 'M' THEN 'MQT'
+          WHEN '0' THEN
+            CASE a.ATFTYP WHEN 'L' THEN 'DDS_LF' WHEN 'P' THEN 'DDS_PF' ELSE 'OTHER' END
+          ELSE COALESCE(a.ATSQLT, 'UNKNOWN')
+        END AS sql_object_type,
+        a.ATJOIN AS is_join_lf,
+        a.ATSELO AS is_select_omit,
+        CASE a.ATACCP
+          WHEN 'A' THEN 'ARRIVAL'
+          WHEN 'K' THEN 'KEYED'
+          WHEN 'E' THEN 'EVI'
+          WHEN 'S' THEN 'SHARED'
+          ELSE a.ATACCP
+        END AS access_path,
+        a.ATTXT AS dependent_text
+      FROM ${IA_LIBRARY}.IADSPDBR d
+      LEFT JOIN ${IA_LIBRARY}.IDSPFDBASA a
+        ON a.ATFILE = d.WHREFI
+      WHERE d.WHRFI = :file_name
+        AND (
+          :dependent_kind = '*ALL'
+          OR (:dependent_kind = 'INDEX' AND a.ATSQLT = 'I')
+          OR (:dependent_kind = 'VIEW'  AND a.ATSQLT = 'V')
+          OR (:dependent_kind = 'TABLE' AND a.ATSQLT = 'T')
+          OR (:dependent_kind = 'MQT'   AND a.ATSQLT = 'M')
+          OR (:dependent_kind = 'DDS_LF' AND a.ATSQLT = '0' AND a.ATFTYP = 'L')
+          OR (:dependent_kind = 'LF'    AND a.ATFTYP = 'L')
+        )
+      ORDER BY sql_object_type, d.WHREFI
       FETCH FIRST :limit ROWS ONLY
 
   # ── 30. Uncompiled Sources — sources without compiled objects ────────────
@@ -2229,4 +2331,380 @@ tools:
         AND (:usage_category = '*ALL' OR OBJECT_USAGE_CATEGORY = :usage_category)
         AND OBJECT_SIZE >= :min_size
       ORDER BY OBJECT_SIZE DESC
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 48. Program Spec Bundle — one-call inventory for spec doc generation ──
+  ia_program_spec_bundle:
+    name: ia-program-spec-bundle
+    source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
+    description: >
+      Documentation-focused bundle: returns LOOKUP, COMPLEXITY, FILES, CALLEES,
+      CALLERS, SUBROUTINES, PARAMS, and BINDINGS for a program in a single call.
+      Use this as the Phase 1 inventory step when generating a technical specification
+      document — replaces the 7 separate calls (ia_member_lookup, ia_code_complexity,
+      ia_program_files, ia_call_hierarchy, ia_program_detail SUBROUTINES,
+      ia_procedure_params, ia_object_references). Each row carries a `section`
+      discriminator; subsequent columns are section-specific. Queries IAMEMBER,
+      IASRCMBRID, IA_CODE_INFO, PROGRAM_TO_FILE_MAPPING_DETAILS, IAPGMCALLS,
+      IASUBRDTL, IAPRCPARM, and IAALLREFPF.
+    parameters:
+      - name: program_name
+        type: string
+        description: "Program / source-member name (max 10)"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: library
+        type: string
+        description: "Filter by library (default: *ALL)"
+        required: false
+        default: "*ALL"
+        maxLength: 10
+      - name: limit
+        type: integer
+        description: "Max rows across all sections (default: 2000)"
+        required: false
+        default: 2000
+        min: 1
+        max: 10000
+    statement: |
+      SELECT
+        'LOOKUP' AS section,
+        CAST(M.MEMBER_NAME       AS VARCHAR(256)) AS name,
+        CAST(M.SOURCE_LIBRARY    AS VARCHAR(256)) AS library,
+        CAST(M.MEMBER_TYPE       AS VARCHAR(256)) AS type,
+        CAST(M.SOURCE_FILE       AS VARCHAR(256)) AS detail_1,
+        CAST(M.MBR_DESCRIPTION   AS VARCHAR(256)) AS detail_2,
+        CAST(S.MBR_TTL_LOC       AS VARCHAR(256)) AS detail_3,
+        CAST(M.MBR_CHANGED_CENTURY || M.MBR_CHANGED_DATE AS VARCHAR(256)) AS detail_4,
+        CAST(''                  AS VARCHAR(256)) AS detail_5
+      FROM ${IA_LIBRARY}.IAMEMBER M
+      LEFT JOIN ${IA_LIBRARY}.IASRCMBRID S
+        ON S.MEMBER_NAME = M.MEMBER_NAME
+        AND S.MEMBER_LIB = M.SOURCE_LIBRARY
+        AND S.MBR_SRC_PF = M.SOURCE_FILE
+      WHERE M.MEMBER_NAME = :program_name
+        AND (:library = '*ALL' OR M.SOURCE_LIBRARY = :library)
+
+      UNION ALL
+
+      SELECT
+        'COMPLEXITY' AS section,
+        CAST(MEMBER_NAME   AS VARCHAR(256)) AS name,
+        CAST(LIBRARY_NAME  AS VARCHAR(256)) AS library,
+        CAST(MEMBER_TYPE   AS VARCHAR(256)) AS type,
+        CAST(TOTAL_LINES   AS VARCHAR(256)) AS detail_1,
+        CAST(EXEC_LINES    AS VARCHAR(256)) AS detail_2,
+        CAST('IF='   || CAST(IF_COUNT   AS VARCHAR(10))
+          || ' DO='  || CAST(DO_COUNT   AS VARCHAR(10))
+          || ' SEL=' || CAST(SEL_COUNT  AS VARCHAR(10))
+          || ' WHEN='|| CAST(WHEN_COUNT AS VARCHAR(10)) AS VARCHAR(256)) AS detail_3,
+        CAST('SBR='  || CAST(SBR_COUNT  AS VARCHAR(10))
+          || ' PROC='|| CAST(PROC_COUNT AS VARCHAR(10))
+          || ' SQL=' || CAST(SQL_COUNT  AS VARCHAR(10))
+          || ' GOTO='|| CAST(GOTO_COUNT AS VARCHAR(10)) AS VARCHAR(256)) AS detail_4,
+        CAST('CALL_PGM='   || CAST(CALL_PGM_COUNT AS VARCHAR(10))
+          || ' CALLED_BY=' || CAST(CALLED_BY_PGM  AS VARCHAR(10))
+          || ' FILES='     || CAST(FILE_COUNT     AS VARCHAR(10))
+          || ' DSPF='      || CAST(DEVF_COUNT     AS VARCHAR(10)) AS VARCHAR(256)) AS detail_5
+      FROM ${IA_LIBRARY}.IA_CODE_INFO
+      WHERE MEMBER_NAME = :program_name
+        AND (:library = '*ALL' OR LIBRARY_NAME = :library)
+
+      UNION ALL
+
+      SELECT
+        'FILES' AS section,
+        CAST(ACTUAL_FILE         AS VARCHAR(256)) AS name,
+        CAST(QUALIFIED_LIBRARY   AS VARCHAR(256)) AS library,
+        CAST(MEMBER_TYPE         AS VARCHAR(256)) AS type,
+        CAST(RENAMED_FILE        AS VARCHAR(256)) AS detail_1,
+        CAST(PREFIX              AS VARCHAR(256)) AS detail_2,
+        CAST(ACTUAL_RCDFMT_NAME  AS VARCHAR(256)) AS detail_3,
+        CAST(INDICATOR_DATASTR   AS VARCHAR(256)) AS detail_4,
+        CAST(FILEINFO_DATASTR    AS VARCHAR(256)) AS detail_5
+      FROM ${IA_LIBRARY}.PROGRAM_TO_FILE_MAPPING_DETAILS
+      WHERE MEMBER_NAME = :program_name
+        AND (:library = '*ALL' OR LIBRARY = :library)
+
+      UNION ALL
+
+      SELECT
+        'CALLEES' AS section,
+        CAST(CALLED_OBJCT AS VARCHAR(256)) AS name,
+        CAST(''           AS VARCHAR(256)) AS library,
+        CAST(''           AS VARCHAR(256)) AS type,
+        CAST(FROM_PROC    AS VARCHAR(256)) AS detail_1,
+        CAST(CALLED_PROC  AS VARCHAR(256)) AS detail_2,
+        CAST(CALL_SEQ     AS VARCHAR(256)) AS detail_3,
+        CAST(''           AS VARCHAR(256)) AS detail_4,
+        CAST(''           AS VARCHAR(256)) AS detail_5
+      FROM ${IA_LIBRARY}.IAPGMCALLS
+      WHERE MBR_NAME = :program_name
+
+      UNION ALL
+
+      SELECT
+        'CALLERS' AS section,
+        CAST(MBR_NAME     AS VARCHAR(256)) AS name,
+        CAST(''           AS VARCHAR(256)) AS library,
+        CAST(''           AS VARCHAR(256)) AS type,
+        CAST(FROM_PROC    AS VARCHAR(256)) AS detail_1,
+        CAST(CALLED_PROC  AS VARCHAR(256)) AS detail_2,
+        CAST(CALL_SEQ     AS VARCHAR(256)) AS detail_3,
+        CAST(CALLED_OBJCT AS VARCHAR(256)) AS detail_4,
+        CAST(''           AS VARCHAR(256)) AS detail_5
+      FROM ${IA_LIBRARY}.IAPGMCALLS
+      WHERE (CALLED_OBJCT = :program_name OR CALLED_PROC = :program_name)
+        AND MBR_NAME <> :program_name
+
+      UNION ALL
+
+      SELECT
+        'SUBROUTINES' AS section,
+        CAST(SR_SBR_NAME AS VARCHAR(256)) AS name,
+        CAST(''          AS VARCHAR(256)) AS library,
+        CAST(''          AS VARCHAR(256)) AS type,
+        CAST(SR_OPCODE   AS VARCHAR(256)) AS detail_1,
+        CAST(SR_CNT      AS VARCHAR(256)) AS detail_2,
+        CAST(MBR_RRN     AS VARCHAR(256)) AS detail_3,
+        CAST(''          AS VARCHAR(256)) AS detail_4,
+        CAST(''          AS VARCHAR(256)) AS detail_5
+      FROM ${IA_LIBRARY}.IASUBRDTL
+      WHERE MBR_NAME = :program_name
+        AND SR_OPCODE = 'BEGSR'
+
+      UNION ALL
+
+      SELECT
+        'PARAMS' AS section,
+        CAST(PARAMETER_NAME  AS VARCHAR(256)) AS name,
+        CAST(LIBRARY_NAME    AS VARCHAR(256)) AS library,
+        CAST(PR_PI_FLAG      AS VARCHAR(256)) AS type,
+        CAST(PROCEDURE_NAME  AS VARCHAR(256)) AS detail_1,
+        CAST(PARM_DATA_TYPE  AS VARCHAR(256)) AS detail_2,
+        CAST(PARM_LENGHT     AS VARCHAR(256)) AS detail_3,
+        CAST(PARAMETER_SEQ   AS VARCHAR(256)) AS detail_4,
+        CAST(KEYWORDS        AS VARCHAR(256)) AS detail_5
+      FROM ${IA_LIBRARY}.IAPRCPARM
+      WHERE MEMBER_NAME = :program_name
+        AND (:library = '*ALL' OR LIBRARY_NAME = :library)
+
+      UNION ALL
+
+      SELECT
+        'BINDINGS' AS section,
+        CAST(REFERENCED_OBJ      AS VARCHAR(256)) AS name,
+        CAST(REFERENCED_OBJLIB   AS VARCHAR(256)) AS library,
+        CAST(REFERENCED_OBJTYP   AS VARCHAR(256)) AS type,
+        CAST(OBJECT_TYPE         AS VARCHAR(256)) AS detail_1,
+        CAST(OBJECT_ATTR         AS VARCHAR(256)) AS detail_2,
+        CAST(REFERENCED_OBJUSG   AS VARCHAR(256)) AS detail_3,
+        CAST(MAPED_FROM          AS VARCHAR(256)) AS detail_4,
+        CAST(''                  AS VARCHAR(256)) AS detail_5
+      FROM ${IA_LIBRARY}.IAALLREFPF
+      WHERE OBJECT_NAME = :program_name
+        AND REFERENCED_OBJTYP IN ('*SRVPGM', '*BNDDIR', '*MODULE')
+
+      ORDER BY section, name
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 49. Field REFFLD Consumers — fields acting as DDS reference templates ──
+  ia_field_reffld_consumers:
+    name: ia-field-reffld-consumers
+    source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
+    description: >
+      Find which fields in a base file are referenced as REFFLD templates by
+      fields in OTHER files. Inverse of "show all fields of file X" — returns
+      only the subset of fields that other DDS-defined files inherit from via
+      REFFLD/REF. Each row shows the consumer file/field plus the base field's
+      data type/length so you can size the blast radius before changing the
+      template field. Self-joins IAFILEDTL on REF_FILE / REF_FIELD. Fixes #62.
+    parameters:
+      - name: file_name
+        type: string
+        description: "Base/template file name (the file whose fields are referenced by other files)"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: field_name
+        type: string
+        description: "Filter to a single base field (default: *ALL)"
+        required: false
+        default: "*ALL"
+      - name: limit
+        type: integer
+        description: "Max results (default: 500)"
+        required: false
+        default: 500
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        consumer.REF_FILE             AS base_file,
+        consumer.REF_LIB              AS base_library,
+        consumer.REF_FIELD            AS base_field,
+        base.FIELD_DATA_TYPE          AS base_field_data_type,
+        base.FIELD_LENGTH             AS base_field_length,
+        base.FIELD_DEC_POS            AS base_field_dec_pos,
+        base.FIELD_NAME_EXTERNAL      AS base_field_external_name,
+        base.RECORD_FORMAT            AS base_record_format,
+        consumer.LIBRARY_NAME         AS consumer_library,
+        consumer.FILE_NAME            AS consumer_file,
+        consumer.FILE_TYPE            AS consumer_file_type,
+        consumer.RECORD_FORMAT        AS consumer_record_format,
+        consumer.FIELD_NAME_INTERNAL  AS consumer_field,
+        consumer.FIELD_NAME_EXTERNAL  AS consumer_field_external_name,
+        consumer.FIELD_DATA_TYPE      AS consumer_field_data_type,
+        consumer.FIELD_LENGTH         AS consumer_field_length,
+        consumer.FIELD_DEC_POS        AS consumer_field_dec_pos,
+        consumer.KEY_FIELD            AS consumer_is_key
+      FROM ${IA_LIBRARY}.IAFILEDTL consumer
+      LEFT JOIN ${IA_LIBRARY}.IAFILEDTL base
+        ON  base.FILE_NAME           = consumer.REF_FILE
+        AND base.FIELD_NAME_INTERNAL = consumer.REF_FIELD
+      WHERE consumer.REF_FILE = :file_name
+        AND consumer.REF_FIELD IS NOT NULL
+        AND consumer.REF_FIELD <> ''
+        AND (:field_name = '*ALL' OR consumer.REF_FIELD = :field_name)
+        AND NOT (consumer.FILE_NAME = consumer.REF_FILE
+                 AND consumer.FIELD_NAME_INTERNAL = consumer.REF_FIELD)
+      ORDER BY consumer.REF_FIELD, consumer.LIBRARY_NAME, consumer.FILE_NAME, consumer.FIELD_NAME_INTERNAL
+      FETCH FIRST :limit ROWS ONLY
+
+  # ── 50. File Constraints — DB constraints + LF select/omit rules ───────────
+  ia_file_constraints:
+    name: ia-file-constraints
+    source: ibmi
+    fetchAllRows: true
+    maxDisplayRows: 1000
+    description: >
+      Surface every constraint and access-path rule attached to a database file.
+      Combines IDSPFDCST (DSPFD CST output: PRIMARY_KEY, UNIQUE, FOREIGN_KEY,
+      CHECK constraints with parent file, key list, delete/update rules, check
+      expression, enabled/disabled state, check-pending flag) with IDSPFDSLOM
+      (DSPFD SELECT/OMIT output: per-LF select/omit rules with field, comparison
+      operator, value list, dynamic-select flag). Use kind to narrow the result
+      set. Empty result means the file has no constraints AND no select/omit
+      rules captured by iA. Fixes #64.
+    parameters:
+      - name: file_name
+        type: string
+        description: "File name (PF for DB constraints, LF for select/omit rules)"
+        required: true
+        minLength: 1
+        maxLength: 10
+      - name: kind
+        type: string
+        description: "*ALL, SELECT_OMIT, PRIMARY_KEY, UNIQUE, FOREIGN_KEY, CHECK (default: *ALL)"
+        required: false
+        default: "*ALL"
+      - name: limit
+        type: integer
+        description: "Max results (default: 500)"
+        required: false
+        default: 500
+        min: 1
+        max: 5000
+    statement: |
+      SELECT
+        CASE PHCSTT
+          WHEN 'P' THEN 'PRIMARY_KEY'
+          WHEN 'U' THEN 'UNIQUE'
+          WHEN 'R' THEN 'FOREIGN_KEY'
+          WHEN 'C' THEN 'CHECK'
+          ELSE PHCSTT
+        END                                AS constraint_kind,
+        CAST(CSFILE  AS VARCHAR(10))       AS file_name,
+        CAST(CSLIB   AS VARCHAR(10))       AS library_name,
+        CAST(CSFTYP  AS VARCHAR(4))        AS file_type,
+        CAST(CSFATR  AS VARCHAR(6))        AS file_attr,
+        CAST(''      AS VARCHAR(10))       AS record_format,
+        CAST(''      AS VARCHAR(10))       AS field_name,
+        CAST(''      AS VARCHAR(10))       AS rule,
+        CAST(''      AS VARCHAR(4))        AS comparison,
+        CAST(''      AS VARCHAR(32))       AS value,
+        CAST(''      AS VARCHAR(1))        AS is_dynamic,
+        CAST(PHCSTN  AS VARCHAR(258))      AS constraint_name,
+        CAST(PHCSTL  AS VARCHAR(10))       AS constraint_library,
+        CASE PHCSTS
+          WHEN 'DD' THEN 'DEFINED_DISABLED'
+          WHEN 'DE' THEN 'DEFINED_ENABLED'
+          WHEN 'ED' THEN 'ESTABLISHED_DISABLED'
+          WHEN 'EE' THEN 'ESTABLISHED_ENABLED'
+          ELSE PHCSTS
+        END                                AS constraint_state,
+        CAST(PHCCKP  AS VARCHAR(1))        AS check_pending,
+        PHNMKY                             AS key_count,
+        PHKEYL                             AS key_total_length,
+        CAST(PHCPFN  AS VARCHAR(10))       AS parent_file,
+        CAST(PHCPLN  AS VARCHAR(10))       AS parent_library,
+        CAST(PHPRKY  AS VARCHAR(1200))     AS parent_key_info,
+        CAST(PHFRKY  AS VARCHAR(1200))     AS foreign_key_info,
+        CASE PHDLTR
+          WHEN 'RS' THEN 'RESTRICT'
+          WHEN 'NA' THEN 'NO_ACTION'
+          WHEN 'CC' THEN 'CASCADE'
+          WHEN 'SN' THEN 'SET_NULL'
+          WHEN 'SD' THEN 'SET_DEFAULT'
+          ELSE PHDLTR
+        END                                AS delete_rule,
+        CASE PHULTR
+          WHEN 'NA' THEN 'NO_ACTION'
+          WHEN 'RS' THEN 'RESTRICT'
+          ELSE PHULTR
+        END                                AS update_rule,
+        CAST(PHCKXP  AS VARCHAR(2000))     AS check_expression,
+        CAST(PHTRUN  AS VARCHAR(1))        AS expression_truncated
+      FROM ${IA_LIBRARY}.IDSPFDCST
+      WHERE CSFILE = :file_name
+        AND (
+          :kind = '*ALL'
+          OR (:kind = 'PRIMARY_KEY' AND PHCSTT = 'P')
+          OR (:kind = 'UNIQUE'      AND PHCSTT = 'U')
+          OR (:kind = 'FOREIGN_KEY' AND PHCSTT = 'R')
+          OR (:kind = 'CHECK'       AND PHCSTT = 'C')
+        )
+      UNION ALL
+      SELECT
+        CAST('SELECT_OMIT' AS VARCHAR(15)) AS constraint_kind,
+        CAST(SOFILE AS VARCHAR(10))        AS file_name,
+        CAST(SOLIB  AS VARCHAR(10))        AS library_name,
+        CAST(SOFTYP AS VARCHAR(4))         AS file_type,
+        CAST(SOFATR AS VARCHAR(6))         AS file_attr,
+        CAST(SORFMT AS VARCHAR(10))        AS record_format,
+        CAST(SOFLD  AS VARCHAR(10))        AS field_name,
+        CASE SORULE
+          WHEN 'S' THEN 'SELECT'
+          WHEN 'O' THEN 'OMIT'
+          WHEN 'A' THEN 'AND'
+          ELSE SORULE
+        END                                AS rule,
+        CAST(SOCOMP AS VARCHAR(4))         AS comparison,
+        CAST(SOVALU AS VARCHAR(32))        AS value,
+        CAST(SODYNS AS VARCHAR(1))         AS is_dynamic,
+        CAST('' AS VARCHAR(258))           AS constraint_name,
+        CAST('' AS VARCHAR(10))            AS constraint_library,
+        CAST('' AS VARCHAR(20))            AS constraint_state,
+        CAST('' AS VARCHAR(1))             AS check_pending,
+        CAST(NULL AS DECIMAL(3,0))         AS key_count,
+        CAST(NULL AS DECIMAL(5,0))         AS key_total_length,
+        CAST('' AS VARCHAR(10))            AS parent_file,
+        CAST('' AS VARCHAR(10))            AS parent_library,
+        CAST('' AS VARCHAR(1200))          AS parent_key_info,
+        CAST('' AS VARCHAR(1200))          AS foreign_key_info,
+        CAST('' AS VARCHAR(15))            AS delete_rule,
+        CAST('' AS VARCHAR(15))            AS update_rule,
+        CAST('' AS VARCHAR(2000))          AS check_expression,
+        CAST('' AS VARCHAR(1))             AS expression_truncated
+      FROM ${IA_LIBRARY}.IDSPFDSLOM
+      WHERE SOFILE = :file_name
+        AND SOFLD IS NOT NULL
+        AND SOFLD <> ''
+        AND (:kind = '*ALL' OR :kind = 'SELECT_OMIT')
+      ORDER BY constraint_kind, record_format, field_name
       FETCH FIRST :limit ROWS ONLY
