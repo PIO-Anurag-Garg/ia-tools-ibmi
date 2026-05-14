@@ -53,6 +53,10 @@ body:
         - ia_member_lookup
         - ia_object_references
         - ia_obj_size
+        - ia_program_spec_bundle
+        - ia_field_reffld_consumers
+        - ia_file_constraints
+        - ia_cl_source
         - execute_sql
         - describe_sql_object
     validations:

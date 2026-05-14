@@ -10,6 +10,7 @@ Use them with **VS Code GitHub Copilot**, **Claude Code**, or any MCP-compatible
 |------|-------------|
 | `impact-analysis.yaml` | MCP tool definitions for iA queries |
 | `.claude/skills/ia/` | `/ia` skill for Claude Code — query guidance and SQL patterns |
+| `PLATFORM-SETUP.md` | MCP connection snippets for VS Code, Cursor, Continue.dev, Windsurf, Cline, Aider |
 | `AGENTS.md` | Agent-specific guidance: always use `/ia` skill for iA analysis |
 | `.vscode/mcp.json` | VS Code MCP server config (auto-detected on open) |
 | `.env.example` | DB2i connection template |
@@ -19,14 +20,14 @@ Use them with **VS Code GitHub Copilot**, **Claude Code**, or any MCP-compatible
 
 A token-efficient skill at `.claude/skills/ia/` that teaches AI agents how to query all 35+ iA tables. Invoke with `/ia` in any Claude Code session. The skill includes table schemas, SQL patterns, and query workflows in its `references/` folder.
 
-## Tools (45 custom + 2 built-in)
+## Tools (49 custom + 2 built-in)
 
 ### Custom iA Tools (defined in `impact-analysis.yaml`)
 
 | # | Tool | Description |
 |---|------|-------------|
 | 1 | `ia_find_object_usages` | Find all objects referencing a given object (filter by type or library) |
-| 2 | `ia_call_hierarchy` | Program call tree (CALLERS/CALLEES/BOTH); searches by program or procedure name |
+| 2 | `ia_call_hierarchy` | Program call tree (CALLERS/CALLEES/BOTH); UNIONs IAPGMCALLS with IAALLREFPF *PGM↔*PGM fallback so menu programs and dynamic CALL targets are surfaced (`source_table` column distinguishes provenance) |
 | 3 | `ia_file_field_impact_analysis` | Blast radius of changing a field in a file |
 | 4 | `ia_program_variables` | All variables declared in a program, including constants with their declared values |
 | 5 | `ia_data_structures` | Data structure definitions and subfields |
@@ -36,45 +37,49 @@ A token-efficient skill at `.claude/skills/ia/` that teaches AI agents how to qu
 | 9 | `ia_file_fields` | Field-level metadata for a database file (names, types, lengths, key sequence, reference chain) |
 | 10 | `ia_object_list` | Repository inventory filtered by object type, attribute, and library |
 | 11 | `ia_program_summary` | Quick program overview with compile info and complexity; supports library filter |
-| 13 | `ia_program_detail` | Deep structural analysis (calls, files, subroutines, variables) |
-| 15 | `ia_rpg_source_tokens` | Token-level RPG source analysis |
-| 16 | `ia_cl_source_tokens` | Token-level CL source analysis |
-| 17 | `ia_dashboard` | Repository health summary by member category |
-| 18 | `ia_repo_config` | iA repository configuration settings; IAOBJUSGDR = date usage stats were last collected |
-| 19 | `ia_exception_log` | iA parser exception log |
-| 20 | `ia_dds_to_ddl_status` | DDS→DDL conversion tracking |
-| 21 | `ia_reference_count` | Lightweight reference count grouped by type |
-| 22 | `ia_unused_objects` | Dead-code candidates (unreferenced objects) |
-| 23 | `ia_circular_deps` | Detect circular call chains |
-| 24 | `ia_override_chain` | Chained OVRDBF dependencies (A→B→C) |
-| 25 | `ia_object_lifecycle` | Creation/change/last-used dates per object |
-| 26 | `ia_code_complexity` | Complexity metrics per source member; includes library column and library filter |
-| 27 | `ia_library_files` | List all files/tables in any IBM i library (defaults to configured IA_LIBRARY; supports `#` library names) |
-| 28 | `ia_object_lookup` | Look up object type, library, and attribute by name |
-| 29 | `ia_file_dependencies` | Find LFs, indexes, and views dependent on a physical file |
-| 30 | `ia_uncompiled_sources` | Find source members without compiled objects (orphaned sources) |
+| 12 | `ia_program_detail` | Deep structural analysis (calls, files, subroutines, variables) |
+| 13 | `ia_rpg_source_tokens` | Token-level RPG source analysis |
+| 14 | `ia_cl_source_tokens` | Token-level CL source analysis |
+| 15 | `ia_dashboard` | Repository health summary by member category |
+| 16 | `ia_repo_config` | iA repository configuration settings; IAOBJUSGDR = date usage stats were last collected |
+| 17 | `ia_exception_log` | iA parser exception log |
+| 18 | `ia_dds_to_ddl_status` | DDS→DDL conversion tracking |
+| 19 | `ia_reference_count` | Lightweight reference count grouped by type |
+| 20 | `ia_unused_objects` | Dead-code candidates (unreferenced objects) |
+| 21 | `ia_circular_deps` | Detect circular call chains |
+| 22 | `ia_override_chain` | Chained OVRDBF dependencies (A→B→C) |
+| 23 | `ia_object_lifecycle` | Creation/change/last-used dates per object |
+| 24 | `ia_code_complexity` | Complexity metrics per source member; includes library column and library filter |
+| 25 | `ia_library_files` | List all files/tables in any IBM i library (defaults to configured IA_LIBRARY; supports `#` library names) |
+| 26 | `ia_object_lookup` | Look up object type, library, and attribute by name |
+| 27 | `ia_file_dependencies` | Find LFs, indexes, and views dependent on a physical file — bifurcated by SQL kind (INDEX/VIEW/TABLE/MQT/DDS_LF) via IDSPFDBASA join, with `dependent_kind` filter |
+| 28 | `ia_uncompiled_sources` | Find source members without compiled objects (orphaned sources) |
 
 ### Advanced Analysis
 
 | # | Tool | Description |
 |---|------|-------------|
-| 31 | `ia_copybook_impact` | Find programs including a copybook via /COPY |
-| 46 | `ia_member_copybooks` | List copybooks used by a source member |
-| 32 | `ia_srvpgm_exports` | List service program exported/imported procedures |
-| 33 | `ia_procedure_xref` | Procedure-level cross-reference (callers/callees) |
-| 34 | `ia_procedure_params` | Get procedure PR/PI parameter signatures |
-| 35 | `ia_cl_jobs` | Detect SBMJOB calls in CL programs |
-| 36 | `ia_variable_ops` | Find variable declarations, assignments, BIFs; supports cross-member opcode search (e.g., all members using CLEAR) |
-| 37 | `ia_klist_usage` | Find KLIST/KFLD key list definitions; filter by key field name with `kfld_name` (supports % wildcards) |
-| 38 | `ia_application_area` | List areas/objects (forward) or find which areas contain an object (reverse lookup via `object_name`) |
-| 39 | `ia_sql_names` | Map SQL long names to system short names |
-| 40 | `ia_program_files` | List files used by a program with PREFIX details |
-| 41 | `ia_rpg_source` | Read RPG source code with optional spec-type and member filtering (supports *ALL member) |
-| 42 | `ia_rpg_source_search` | Search RPG source across members for keywords |
-| 43 | `ia_rpg_source_stats` | Modernization stats: free-format vs fixed-format, comment and blank line counts |
-| 44 | `ia_member_lookup` | Look up source member metadata, verify existence, and view line counts (supersedes ia_source_code) |
-| 45 | `ia_object_references` | Find what an object references/contains; filter by source object type to disambiguate *PGM vs *SRVPGM |
-| 47 | `ia_obj_size` | Object size and usage metrics — lookup a specific object or rank the largest / unused objects |
+| 29 | `ia_copybook_impact` | Find programs including a copybook via /COPY |
+| 30 | `ia_srvpgm_exports` | List service program exported/imported procedures |
+| 31 | `ia_procedure_xref` | Procedure-level cross-reference (callers/callees) |
+| 32 | `ia_cl_jobs` | Detect SBMJOB calls in CL programs |
+| 33 | `ia_procedure_params` | Get procedure PR/PI parameter signatures |
+| 34 | `ia_variable_ops` | Find variable declarations, assignments, BIFs; supports cross-member opcode search (e.g., all members using CLEAR) |
+| 35 | `ia_klist_usage` | Find KLIST/KFLD key list definitions; filter by key field name with `kfld_name` (supports % wildcards) |
+| 36 | `ia_application_area` | List areas/objects (forward) or find which areas contain an object (reverse lookup via `object_name`) |
+| 37 | `ia_sql_names` | Map SQL long names to system short names |
+| 38 | `ia_program_files` | List files used by a program with PREFIX details |
+| 39 | `ia_rpg_source` | Read RPG source code with optional spec-type and member filtering (supports *ALL member) |
+| 40 | `ia_rpg_source_search` | Search RPG source across members for keywords |
+| 41 | `ia_rpg_source_stats` | Modernization stats: free-format vs fixed-format, comment and blank line counts |
+| 42 | `ia_member_lookup` | Look up source member metadata, verify existence, and view line counts (supersedes ia_source_code) |
+| 43 | `ia_object_references` | Find what an object references/contains; filter by source object type to disambiguate *PGM vs *SRVPGM |
+| 44 | `ia_member_copybooks` | List copybooks used by a source member |
+| 45 | `ia_obj_size` | Object size and usage metrics — lookup a specific object or rank the largest / unused objects |
+| 46 | `ia_program_spec_bundle` | One-call inventory for technical-spec doc generation: LOOKUP, COMPLEXITY, FILES, CALLEES, CALLERS, SUBROUTINES, PARAMS, BINDINGS in a single query (replaces 7 separate calls) |
+| 47 | `ia_field_reffld_consumers` | Inverse of `ia_file_fields`: returns only the fields in a base file that are referenced as REFFLD templates by other files, with consumer file/field/type/length info |
+| 48 | `ia_file_constraints` | DB constraints (PK/UQ/FK/CHK from IDSPFDCST) and LF select/omit rules (from IDSPFDSLOM) in one call, with decoded delete/update rules and parent file links |
+| 49 | `ia_cl_source` | Read CL/CLLE/CLP source code line by line (queries IAQCLSRC); supports offset/limit pagination for sources >10000 lines |
 
 ### Built-in MCP Server Tools
 
@@ -146,7 +151,7 @@ npx @ibm/ibmi-mcp-server --transport http --tools ./impact-analysis.yaml
 
 You should see output like:
 ```
-IBM i MCP Server listening on http://localhost:3000
+IBM i MCP Server listening on http://localhost:3010
 ```
 
 > **Keep this terminal running** — the MCP server must stay active while you use VS Code.
@@ -162,13 +167,13 @@ IBM i MCP Server listening on http://localhost:3000
 code .
 ```
 
-VS Code detects `.vscode/mcp.json` and connects to the running MCP server at `http://localhost:3000/mcp`. The 47 iA tools plus built-in SQL tools become available in Copilot Chat.
+VS Code detects `.vscode/mcp.json` and connects to the running MCP server at `http://localhost:3010/mcp`. The 49 iA tools plus built-in SQL tools become available in Copilot Chat.
 
 ### Step 5: Use iA tools in Copilot Chat
 
 1. **Open Copilot Chat**: Press `Ctrl+Alt+I` (Windows/Linux) or `Cmd+Alt+I` (Mac)
 2. **Switch to Agent mode**: Click the mode dropdown at the top of the chat panel and select **"Agent"**
-3. **Verify tools are loaded**: Click the **tools icon** (wrench/hammer) at the top-left of the chat input — you should see the 47 `ia-*` tools plus `execute_sql` and `describe_sql_object` listed under "ibmi-ia-tools"
+3. **Verify tools are loaded**: Click the **tools icon** (wrench/hammer) at the top-left of the chat input — you should see the 49 `ia-*` tools plus `execute_sql` and `describe_sql_object` listed under "ibmi-ia-tools"
 4. **Ask a question** — the agent will automatically pick the right iA tool:
 
 ```
@@ -208,6 +213,10 @@ Create a `.mcp.json` file in your project root:
 
 Set `DB2i_HOST`, `DB2i_USER`, `DB2i_PASS`, `DB2i_PORT`, and `IA_LIBRARY` as environment variables (or in `.env` in the same directory — the MCP server loads it automatically).
 
+### Other Platforms (Cursor, Continue.dev, Windsurf, Cline, Aider)
+
+See **[PLATFORM-SETUP.md](PLATFORM-SETUP.md)** for MCP connection snippets.
+
 ### Command Line (manual testing)
 
 Run the MCP server directly to test without an AI agent:
@@ -225,7 +234,7 @@ export IA_LIBRARY=SDK01
 
 # Start in HTTP mode for manual testing
 npx @ibm/ibmi-mcp-server --transport http --tools ./impact-analysis.yaml
-# Server starts at http://localhost:3000
+# Server starts at http://localhost:3010
 ```
 
 ---
@@ -280,7 +289,7 @@ These tools query the following iA repository tables (pre-parsed IBM i source me
 | `npx: Access is denied` (Windows) | Install globally: `npm install -g @ibm/ibmi-mcp-server`, then use `node %APPDATA%\npm\node_modules\@ibm\ibmi-mcp-server\dist\index.js --transport http --tools ./impact-analysis.yaml` |
 | MCP server not starting | Check Node.js version: `node --version` (must be 18+) |
 | Tools not showing in Copilot Chat | Make sure you're in **Agent** mode (not Ask or Edit mode). Click the tools icon to enable/disable specific tools |
-| Tools not connecting in VS Code | Ensure the MCP server is running in a separate terminal (`http://localhost:3000`) before opening VS Code |
+| Tools not connecting in VS Code | Ensure the MCP server is running in a separate terminal (`http://localhost:3010`) before opening VS Code |
 | `Connection refused` on port 8076 | Verify Mapepire is running on your IBM i — check with your system administrator |
 | Tools return no data | Check `IA_LIBRARY` in `.env` matches your iA library name. Verify the user profile has `*READ` authority to the iA tables |
 | YAML syntax error | Validate the file: `npx js-yaml impact-analysis.yaml` |

@@ -2,13 +2,20 @@
 node_modules/
 CLAUDE.md
 .mcp.json
-# Ignore .claude except for ia skill
+# Ignore .claude except for ia skill and ia-spec command
 .claude/*
 !.claude/skills/
+!.claude/commands/
 .claude/skills/*
 !.claude/skills/ia/
+!.claude/skills/ia-spec/
+.claude/commands/*
+!.claude/commands/ia-spec.md
 archive/
 docs/
 .bob/
 mcp.db*
-DEPLOYMENT_GUIDE.md
+__pycache__/
+.venv/
+documentation-flow.md 
+skill-plugins.md
