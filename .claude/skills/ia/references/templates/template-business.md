@@ -93,6 +93,26 @@ This program enforces the following business rules:
 
 ---
 
+### Business Process Flow Tree *(mandatory)*
+
+Render one ASCII process flow tree summarising the business steps and decision points in plain language (no RPG opcodes, no subroutine names). Use a fenced ```` ```text ```` block and box-drawing characters (`├──`, `└──`, `│`). Example shape:
+
+```text
+Customer Order Flow
+├── Receive new order
+│   ├── Customer on credit hold? -> reject + send notice
+│   └── Customer in good standing -> proceed
+├── Check inventory for each line item
+│   ├── Available -> reserve stock
+│   └── Backorder -> flag and continue
+├── Calculate total (items + tax + shipping)
+└── Confirm order
+    ├── Auto-confirm if total < $500
+    └── Manager approval if total >= $500
+```
+
+One tree minimum per program. Branches and leaves use plain business language a non-technical reader can follow.
+
 ## 5. Related Programs
 
 ### Programs This Calls

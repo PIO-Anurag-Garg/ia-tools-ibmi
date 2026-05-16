@@ -75,6 +75,24 @@ Describe the program's execution flow **in the same sequence in which it actuall
 
 ---
 
+### Processing Flow Tree *(mandatory)*
+
+Render one ASCII process flow tree summarising the major decision branches, EXSR/CALLP edges, and error paths through the program. Use a fenced ```` ```text ```` block and box-drawing characters (`├──`, `└──`, `│`) — never Mermaid. Example shape:
+
+```text
+Main Flow
+├── Validate input parameters
+│   ├── Invalid -> EXSR ERRORHANDLER -> return
+│   └── Valid -> proceed
+├── Read CUSTMAST (PRDLIB) keyed on CUSTNO (Customer Number)
+│   ├── Not found -> log + EXSR NOTFOUND -> return
+│   └── Found -> proceed
+├── CALCBALANCE (line 245) -> compute new BALANCE
+└── Write to TRANHIST (PRDLIB) -> commit
+```
+
+One tree minimum per program. More are fine for branchy logic. Each leaf shows `<condition or step> -> <result>` or `<step name>` with optional `*(line NNN)*` anchor.
+
 ## 5. Subroutine / Procedure Analysis
 
 For each significant subroutine or procedure (use the **complete** SUBROUTINES list — do not omit any non-trivial routine):

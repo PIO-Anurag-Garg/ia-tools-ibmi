@@ -121,6 +121,27 @@ Input Sources → Processing → Output Destinations
 
 ---
 
+### Dependency / Integration Flow Tree *(mandatory)*
+
+Render one ASCII process flow tree showing this program's place in the broader system: callers above, callees and integration points below, with file-sharing edges noted. Use a fenced ```` ```text ```` block and box-drawing characters (`├──`, `└──`, `│`). Example shape:
+
+```text
+ORDENTRY (PRDLIB)
+├── Callers
+│   ├── MENU01 (PRDLIB) -> interactive entry
+│   └── BATCHQ (PRDLIB) -> scheduled batch
+├── Callees
+│   ├── CUSTLOOKUP (UTILIB) -> reads CUSTMAST (PRDLIB)
+│   ├── PRICECALC (UTILIB) -> reads PRICELIST (PRDLIB)
+│   └── ORDERWRITE (PRDLIB) -> writes ORDHIST (PRDLIB)
+├── Service programs
+│   └── DATELIB (UTILIB) -> date arithmetic procedures
+└── External integrations
+    └── *DTAARA ORDDTA (PRDLIB) -> control flags read at startup
+```
+
+One tree minimum per program. Leaves carry the actual library on every name.
+
 ## 6. Complexity & Maintainability
 
 ### Complexity Metrics

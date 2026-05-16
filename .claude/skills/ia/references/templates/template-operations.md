@@ -159,6 +159,23 @@
 
 ## 8. Troubleshooting Guide
 
+### Troubleshooting Decision Tree *(mandatory)*
+
+Render one ASCII decision tree mapping common symptoms to diagnostic steps and resolutions. Use a fenced ```` ```text ```` block and box-drawing characters (`├──`, `└──`, `│`). Example shape:
+
+```text
+Symptom
+├── Job ends abnormally with MCH error
+│   ├── MCH3601 (pointer not set) -> check work-field initialization in INITPROC
+│   └── MCH1202 (decimal data) -> dump file, verify numeric field contents
+├── Job runs but produces no output
+│   ├── Empty input file -> check upstream feed job log
+│   └── All records filtered -> verify selection criteria in SELRPT
+└── Job hangs / no progress
+    ├── File lock from another job -> WRKOBJLCK, identify holder, escalate
+    └── Database deadlock -> review recent commitment-control changes
+```
+
 ### Problem: Program Runs Slowly
 
 **Symptoms:**
@@ -208,6 +225,21 @@
 ---
 
 ## 9. Contacts
+
+### Escalation Flow Tree *(mandatory)*
+
+Render one ASCII flow tree showing who to contact for which class of issue, in order. Use a fenced ```` ```text ```` block and box-drawing characters (`├──`, `└──`, `│`). Example shape:
+
+```text
+Incident
+├── Severity 1 (production down)
+│   ├── Page on-call IBM i admin immediately
+│   └── If unresolved in 30 min -> page application owner
+├── Severity 2 (degraded function)
+│   └── Open ticket -> assign to application team
+└── Severity 3 (data anomaly, non-blocking)
+    └── Email application team -> next business day
+```
 
 ### Support Escalation
 

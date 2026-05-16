@@ -4,6 +4,19 @@ Use this guide whenever a user asks for a **technical program document** for an 
 
 ---
 
+## ⛔ Rule Zero — Never Read Existing Documentation
+
+**Every new document must be generated from scratch using live iA tool output only.** Before, during, and after generation:
+
+- **Do NOT read any existing `.md` / `.docx` / `.pdf` under `docs/program-specs/`** — not for the target program, not for any other program, not for "style reference" or "tone." Treat the contents of every prior doc as off-limits.
+- The **only** permitted use of `docs/program-specs/{PROGRAM_NAME}/` is to **list directory entries** (filenames only) to compute the next `_v{N+1}` suffix per Step 8. Do not open or read any file in that folder.
+- Do not read other repos' or other audiences' prior outputs as a template either. Templates live exclusively under `references/templates/`.
+- **Why:** Prior drafts may contain stale facts, hallucinations from earlier model runs, or assumptions that no longer match the current source. Reading them contaminates the new document with errors carried forward. Source-of-truth is iA tool output, never a prior document.
+
+If you find yourself about to open any file under `docs/program-specs/`, stop. Re-derive from iA tools instead.
+
+---
+
 ## Step 1 — Smart Profile Selection
 
 **Check the user's request for profile indicators:**
@@ -55,6 +68,33 @@ Please configure your documentation preferences:
 ```
 
 Wait for one response, then proceed.
+
+---
+
+## Step 1.5 — Todo List Kickoff
+
+**After Step 1 (audience and template known) and before any `ia_*` MCP call, the agent MUST create a todo list via `TodoWrite` covering the rest of the workflow.** No iA tool call may run before this todo list exists.
+
+**Why:** Program documentation is a 9-step workflow with branching tool calls and conditional sub-steps. Without an explicit plan, agents drop verification, invent filenames, or skip the fields lookup. The todo list is both a contract with the user and the agent's own self-checklist.
+
+**Mandatory todo skeleton** (customize per audience and per program — drop N/A steps and add per-template subsections):
+
+```text
+- Step 2: Baseline inventory (ia_program_spec_bundle)
+- Step 2.5: Field lookup (ia_file_fields for every file in FILES — silent cache)
+- Step 3: Source + Business Rule Extraction (ia_rpg_source OR ia_cl_source)
+- Step 4: Confirm template selection (per Step 1 audience)
+- Step 5: Assemble document sections per template
+- Step 6: Render call hierarchy + ASCII process flow tree(s)
+- Step 7: Run Verification Rules pass
+- Step 7.5: Filename Resolution Gate (list folder, coerce DocType, compute _v{N})
+- Step 8: Save to docs/program-specs/{PGM}/{filename}
+- Step 9: Export to DOCX/PDF (only on user request)
+```
+
+The agent may drop steps that are confirmed N/A (e.g., Step 3 trims if no callees, Step 9 only on request) but every remaining step must appear as a todo or be explicitly noted as skipped with a reason.
+
+**Hard-stop:** If the agent reaches Step 2 without having called `TodoWrite`, halt and create the todo list before proceeding.
 
 ---
 
@@ -131,6 +171,37 @@ Run these in order; skip any that return zero rows. Combine results to populate 
 
 ---
 
+## Step 2.5 — File Enrichment + Silent Field Lookup
+
+Before writing any document section, enrich the bundle's FILES list with **file descriptions and library names**, and load **every field's description into an in-memory lookup**. This step is non-negotiable — Section 3 (Files and Data Sources), Section 4 narrative, and inline field mentions throughout the document depend on it.
+
+**For every file in the FILES section** (no exceptions — input, output, update, and reference files all qualify):
+
+| Tool | What to capture | Used in |
+|------|-----------------|---------|
+| `ia_program_files(member_name=X)` | File usage + **FILE_TEXT / TEXT description** + **library** | Section 3 file table, narrative |
+| `ia_file_fields(file_name=<file>, library_name=<lib>)` | Every field's FIELD_NAME + FIELD_TEXT (description), held as a silent lookup | Inline `FIELDNAME (Description)` whenever a field appears in narrative, BR-xxx, subroutine logic, Section 7 output behavior, or Section 8 glossary |
+
+**Do NOT render the field list as a per-file table.** The `ia_file_fields` output is consumed only as a description lookup. Field mentions appear in the document **only** where the program logic touches them, with their inline description. (See the Field Description Rule below.)
+
+**De-duplication:** Call `ia_file_fields` once per unique `(library, file)` pair. If the same physical file appears with multiple usage types, the field set is identical — don't re-fetch.
+
+**If a file's TEXT description is empty** in `ia_program_files`, fall back to `describe_sql_object(object_name=<file>, library_name=<lib>)` to pull the DDL `LABEL ON` / `TEXT` description. Do not invent a description.
+
+**Library names are mandatory for every file** — never write a file name without its library (e.g., `CUSTMAST (PRDLIB)`). If the library is unresolved, that is a **HARD STOP**: ask the user which library to document against. Do not default to `*LIBL` or leave blank.
+
+**Field description rule (applies everywhere in the document):**
+
+Every field reference — in narrative prose, BR-xxx entries, output behavior, key-field lists, and glossary — must include the field's plain-language description in parentheses, **on every mention**:
+
+> Read `CUSTMAST (PRDLIB)` keyed on `CUSTNO (Customer Number)`. Update `STATUS (Account Status Code)` when `BALANCE (Outstanding Balance Amount)` exceeds `CRDLIM (Credit Limit Amount)`.
+
+- The description comes from `FIELD_TEXT` returned by `ia_file_fields`.
+- If `FIELD_TEXT` is blank, look at column heading text or fall back to "(no description in DDL)" — do not invent meaning.
+- This applies on **every occurrence** of the field, not just the first. Verbosity is intentional: viewers reading any single paragraph in isolation must understand what the field represents.
+
+---
+
 ## Step 3 — Source + Business Rule Extraction
 
 Retrieve source and extract business rules using the appropriate source tool **based on member type** (from Step 2's LOOKUP section):
@@ -204,7 +275,9 @@ See [`templates/README.md`](templates/README.md) for comparison matrix.
 
 > **Tone rule (applies to every section):** Use business-friendly language with technical accuracy. **Never** describe the code line-by-line. **Never** assume a pattern that is not explicitly present in the source.
 
-> **Library resolution rule (applies everywhere):** Always use the **actual library name** (e.g., `PRDLIB`) wherever a library appears — header, file tables, output sections, mermaid labels, glossary. Resolve from the bundle's LOOKUP / FILES sections; never leave a placeholder in the deliverable.
+> **Library resolution rule (applies everywhere):** Always use the **actual library name** (e.g., `PRDLIB`) wherever a library appears — header, file tables, output sections, mermaid labels, glossary. Resolve from the bundle's LOOKUP / FILES sections; never leave a placeholder in the deliverable. **Every file mention** must carry its library: `FILENAME (LIBRARY)`.
+
+> **Field-format rule (applies everywhere):** Every field reference — narrative, BR-xxx entries, subroutine blocks, output behavior, glossary — must include the field's description in parentheses on **every** mention: `FIELDNAME (Field Description)`. Pull the description from `FIELD_TEXT` in `ia_file_fields`. Verbosity is intentional so any paragraph stands on its own.
 
 ### Section 1 — Program Overview
 - Program name (and any alternate name in source comments).
@@ -221,7 +294,8 @@ See [`templates/README.md`](templates/README.md) for comparison matrix.
 
 ### Section 3 — Files and Data Sources
 - Populate from bundle FILES section only — do not add files from source that aren't confirmed by iA.
-- For each file include: name, **actual library**, usage type (Input / Output / Update / Reference), business purpose.
+- For each file include: name, **actual library** (mandatory — never blank, never `*LIBL`), usage type (Input / Output / Update / Reference), **file description** (from `ia_program_files` FILE_TEXT or `describe_sql_object`), business purpose.
+- **Do NOT render an exhaustive per-file fields table.** Field metadata loaded by Step 2.5 is used only as an inline-description lookup. Individual fields are mentioned in narrative, BR-xxx, subroutine logic, and Section 7 only where the program touches them, always with the inline `FIELDNAME (Field Description)` format.
 - **Data areas (*DTAARA) are NOT files.** Add a separate subsection: **"Data Areas Used"** with columns Name, Library, Size, Operations (IN/OUT), Purpose.
 - If `ia_object_references` shows *FILE entries not in FILES section, note them as "detected via object reference, not F-spec."
 
@@ -234,8 +308,30 @@ See [`templates/README.md`](templates/README.md) for comparison matrix.
 - Add line-number anchors *(line NNN)* where they aid traceability.
 
 ### Section 5 — Subroutine / Procedure Analysis
-- Use the **complete SUBROUTINES list** from Step 2 — never document subroutines selectively. Every non-trivial routine gets its own block with Name, Purpose, High-level behavior, Key decisions / calculations.
-- If a subroutine name implies a capability (e.g., SENDEMAILPROCESS, POPULATEMEMBEREXCLUSIONDETAILS) not yet reflected anywhere, document it even if you cannot see the full logic.
+- Use the **complete SUBROUTINES list** from Step 2 — never document subroutines selectively. Every non-trivial routine gets its own block.
+- **Mandatory subroutine block format:**
+
+  ```markdown
+  #### SUBROUTINE_NAME — lines {START_LINE}–{END_LINE}
+
+  **Purpose:** <one sentence>
+
+  **High-level behavior:**
+  - <bullet> *(line NNN)*
+  - <bullet> *(line NNN)*
+
+  **Key decisions / calculations:**
+  - <decision/calc with field names + descriptions> *(line NNN)*
+
+  **Files accessed:** `FILE1 (LIB1)` keyed on `KEY1 (Key 1 Description)`, ...
+  **Calls:** [CALLP] CALLEE1 *(line NNN)*, [EXSR] OTHER_SR *(line NNN)*
+  ```
+
+  - `{START_LINE}` = BEGSR line number from `ia_subroutines` / SUBROUTINES section.
+  - `{END_LINE}` = ENDSR line number from same source.
+  - **Every internal anchor** (decision, calculation, I/O opcode, EXSR call, CALLP, GOTO) must carry an inline `*(line NNN)*` tag.
+  - Field references inside the block follow the field-format rule: `FIELDNAME (Description)` on every mention.
+- If a subroutine name implies a capability (e.g., SENDEMAILPROCESS, POPULATEMEMBEREXCLUSIONDETAILS) not yet reflected anywhere, document it even if you cannot see the full logic — still include the line range from SUBROUTINES.
 - **Call Hierarchy Diagram (text-based ASCII tree)** — include if `CALL_PGM_COUNT > 0` OR CALLEES has rows. Use the **actual library** in the parent node label (e.g., `ORDENTRY (PRDLIB)`). One-level depth unless the user asks for deeper traversal.
 - Only list callees that appear in CALLEES; only list service programs from BINDINGS. If `CALL_PGM_COUNT = 0` but CALLEES has rows, prepend the "bound CALLP only" note from Step 6.
 - Callers go in Section 9 (Key Observations) — only if confirmed by CALLERS section.
@@ -251,7 +347,8 @@ See [`templates/README.md`](templates/README.md) for comparison matrix.
 - For each file the program writes or updates, document conditions for create vs. update, field population / accumulation logic, and the relationship between input and output fields.
 
 ### Section 8 — Glossary
-- Define every important keyword, abbreviation, and field used in the program in plain language, including unit / domain when relevant.
+- Define every important keyword, abbreviation, and field **that was actually referenced elsewhere in the document** in plain language, including unit / domain when relevant.
+- Do not list every field returned by `ia_file_fields` — only fields that surfaced in narrative, BR-xxx, subroutine analysis, or Section 7. The glossary mirrors the document's actual scope, not the full file schemas.
 
 ### Section 9 — Key Observations (Optional)
 - Complexity or risk areas (high IF/DO counts, GOTOs, deep nesting, large data structures).
@@ -322,6 +419,12 @@ PROGRAMNAME (LIBRARY)
 | ✓ Section 8 (Glossary) | Important fields/keywords referenced elsewhere are defined | **WARNING** — gaps |
 | ✓ Statistics | All 9+ complexity metrics present | **WARNING** — incomplete stats |
 | ✓ Header | Library version stated; actual library name used throughout (no placeholders) | **ERROR** — substitute actual library |
+| ✓ Step 2.5 (File enrichment) | `ia_file_fields` called for every unique file in FILES section; field descriptions held as silent lookup (no per-file fields table rendered) | **ERROR** — re-run enrichment |
+| ✓ File library coverage | Every file mention includes its library: `FILENAME (LIBRARY)` | **ERROR** — substitute library on every mention |
+| ✓ File description coverage | Every file row in Section 3 has a description sourced from `ia_program_files` / `describe_sql_object` | **ERROR** — fetch and populate |
+| ✓ Field-format rule | Every field reference in narrative/BRs/sub-blocks carries `(Description)` on every mention | **ERROR** — rewrite occurrences |
+| ✓ Subroutine line ranges | Every subroutine block header shows `lines START–END`; every internal anchor has `*(line NNN)*` | **ERROR** — add line numbers |
+| ✓ Source isolation | No file under `docs/program-specs/` was read during generation (only directory listed for versioning) | **ERROR** — regenerate from iA tools only |
 
 Fix all **ERRORs** before delivery. Present **WARNINGs** with notes in the quality metrics footer.
 
@@ -334,6 +437,55 @@ Fix all **ERRORs** before delivery. Present **WARNINGs** with notes in the quali
 ❌ 1 error detected:
   - Section 3: Data area MYDTAARA found in file table
 ```
+
+---
+
+## Step 7.5 — Filename Resolution Gate
+
+**Mandatory gate between Step 7 (Verification) and Step 8 (Save). The agent MUST run this algorithm to produce the output filename. Step 8 consumes that filename verbatim — never compute it inline.**
+
+### Inputs
+
+- `PROGRAM_NAME` — the program being documented.
+- User-requested DocType wording (or empty → default `Technical_Specification`).
+
+### Output
+
+Exactly one absolute filename:
+
+```
+docs/program-specs/{PROGRAM_NAME}/{PROGRAM_NAME}_{CanonicalDocType}_v{N}.md
+```
+
+### Algorithm (in order, mandatory)
+
+**1. Coerce the requested DocType to exactly one of four canonical names:**
+
+| User wording (examples) | Canonical DocType | Audience template |
+|---|---|---|
+| "technical spec", "developer doc", "code doc", default | `Technical_Specification` | `template-developer.md` |
+| "functional doc", "business doc", "BA doc", "summary" | `Functional_Document` | `template-business.md` |
+| "ops guide", "runbook", "support doc", "operations" | `Operations_Guide` | `template-operations.md` |
+| "architecture review", "audit", "modernization", "design review" | `Architecture_Review` | `template-architect.md` |
+
+If the request matches none, the agent must tell the user which canonical type it chose and why. If the choice is genuinely ambiguous, ask the user to pick one of the four.
+
+**2. List the program folder ROOT ONLY.** Run `ls docs/program-specs/{PROGRAM_NAME}/` (or platform equivalent). Do **not** descend into `drafts/`, `Archive/`, or any other subdirectory. If the folder does not exist, treat the listing as empty (the folder will be created at save time).
+
+**3. Filter to canonical pattern only.** Keep only files matching the regex `^{PROGRAM_NAME}_{CanonicalDocType}_v(\d+)\.md$`. Discard everything else, including legacy names like `{PGM}_Specification.md`, `{PGM}_Program_Analysis_v5.md`, `{PGM}_Doc.md`, `{PGM}-Functional-Document.md`, and any file without a `_v{N}` suffix.
+
+**4. Compute next version.** `N = max(matched versions) + 1`. If no canonical match exists, `N = 1`.
+
+**5. Emit the filename.** Print it back to the user before any file write: `Writing {PGM}_{CanonicalDocType}_v{N}.md` so they can intervene if the coercion was wrong.
+
+### Hard-stop conditions
+
+- **DocType cannot be coerced** → ask the user which of the four canonical types they want; do not pick silently.
+- **Folder listing fails** (permission, IO error) → halt and report; never guess a version number.
+
+### Legacy filename note
+
+Files like `BIO60R_Specification.md`, `IAMENUR_Doc.md`, `CUSTMNTR_Documentation.md`, `ADMINP-Functional-Document.md` are **left strictly in place** — never move, rename, or delete them. They simply don't count toward the version computation.
 
 ---
 
@@ -369,30 +521,19 @@ Fix all **ERRORs** before delivery. Present **WARNINGs** with notes in the quali
 - <Recommendation text>
 ```
 
-**Save location — always write output here, and always create a NEW versioned file:**
+**Save location — use the filename emitted by Step 7.5 verbatim:**
 
 ```
-docs/program-specs/{PROGRAM_NAME}/{PROGRAM_NAME}_{DocType}_v{N}.md
+docs/program-specs/{PROGRAM_NAME}/{PROGRAM_NAME}_{CanonicalDocType}_v{N}.md
 ```
 
-| Document type | File name pattern |
-|---|---|
-| Technical specification (default) | `{PROGRAM_NAME}_Technical_Specification_v{N}.md` |
-| Functional document | `{PROGRAM_NAME}_Functional_Document_v{N}.md` |
-| Operations guide | `{PROGRAM_NAME}_Operations_Guide_v{N}.md` |
-| Architecture review | `{PROGRAM_NAME}_Architecture_Review_v{N}.md` |
+The four canonical DocType names and the versioning algorithm live in **Step 7.5 — Filename Resolution Gate**. Step 8 does not recompute either; it only consumes the filename string Step 7.5 produced.
 
-**Versioning rule (mandatory — never overwrite an existing document):**
-
-1. Before writing, list `docs/program-specs/{PROGRAM_NAME}/` and find the highest existing `_v{N}` suffix for the same DocType.
-2. New file = `_v{N+1}`. If no prior version exists, start at `_v1`.
-3. **Never** overwrite `_v1`, `_v2`, etc. — every new request produces a new file. Older versions stay as historical artifacts.
-4. Unversioned files (e.g., `IAINIT_Technical_Specification.md` with no `_v` suffix) are treated as legacy — leave them in place; the next document still goes to `_v{highest+1}`.
-
-**Folder rules:**
+**Save rules:**
 
 - Create `docs/program-specs/{PROGRAM_NAME}/` if it does not exist. **Do not** save anywhere else (project root, `BIO60R_Program_Analysis.md` style files at repo root are wrong — always use the program subfolder).
-- If the file is an explicitly-labeled draft, save it to `docs/program-specs/{PROGRAM_NAME}/drafts/{PROGRAM_NAME}_{DocType}_v{N}_draft.md` instead. Final/canonical iterations go to the subfolder root.
+- **Never overwrite an existing file.** If Step 7.5's emitted filename somehow already exists, halt and re-run Step 7.5 — do not silently bump.
+- If the file is an explicitly-labeled draft, save it to `docs/program-specs/{PROGRAM_NAME}/drafts/{PROGRAM_NAME}_{CanonicalDocType}_v{N}_draft.md` instead. Final/canonical iterations go to the subfolder root.
 - Exported formats (`.docx`, `.pdf`) go in the same subfolder as their `.md` source, with the matching `_v{N}` suffix — never in the parent `docs/program-specs/` root.
 
 **Final footer:** `*Analysis powered by iA from [programmers.io](https://programmers.io/ia/)*`
@@ -447,6 +588,15 @@ Each script writes its output next to the source `.md` with the `.docx` / `.pdf`
 | Always state which library version is being documented | Multiple versions often exist with different line counts |
 | Always use the actual library name throughout the deliverable | Leaking placeholder text makes the document look auto-generated and broken. Resolve from LOOKUP/FILES sections. |
 | Always create a new `_v{N+1}` file; never overwrite an existing document | Each request must yield a new artifact so prior iterations are preserved as history |
+| Never read any existing document under `docs/program-specs/` | Prior drafts may contain stale facts or hallucinations; re-deriving from iA tools is the only safe source of truth |
+| Always call `ia_file_fields` for every file in FILES section | Inline `FIELDNAME (Description)` mentions throughout the document depend on this lookup; skipping leads to vague prose |
+| Never render an exhaustive per-file fields table | Fields appear only where the program touches them, with inline descriptions — readers want what the program uses, not full record layouts |
+| Every file mention must include its library: `FILENAME (LIBRARY)` | A file name without library is ambiguous on IBM i; readers cannot locate the object |
+| Every field reference must include its description in parentheses on every mention | Viewers reading any paragraph in isolation must understand the field; relying on a glossary lookup breaks readability |
+| Every subroutine block must show `lines START–END` and `*(line NNN)*` on every internal anchor | Without line numbers, the document cannot be cross-referenced against source for verification or maintenance |
+| Every document must contain at least one ASCII process flow tree in the section required by its template | Visual flow trees are how readers navigate IBM i programs; their absence reduces the doc to prose with no decision-path overview |
+| Output filename must match canonical pattern `{PGM}_{CanonicalDocType}_v{N}.md` from Step 7.5 | CanonicalDocType ∈ {Technical_Specification, Functional_Document, Operations_Guide, Architecture_Review}, N from Step 7.5; any other shape = **ERROR**, do not write |
+| `TodoWrite` must run after Step 1 and before any `ia_*` MCP call | Without an explicit plan, agents skip verification, invent filenames, or drop steps; the todo list is the agent's self-checklist |
 
 ---
 
@@ -462,6 +612,15 @@ Each script writes its output next to the source `.md` with the `.docx` / `.pdf`
 | Parameter gap | Section 2 all "Not determinable" | `ia_procedure_params` is mandatory before writing Section 2 |
 | Caller assertion | Caller listed with no CALLERS result in iA | Only assert callers confirmed by `ia_call_hierarchy` |
 | Character validator gap | Alphanumeric validator missing digits | Flag any alphanumeric validator missing digits as "verify against source" |
+| Reading a prior doc for "style" | New doc inherits stale facts from `_v1` or another program's spec | **Forbidden** — never open any file under `docs/program-specs/`; re-derive everything from iA tool output |
+| File name without library | `CUSTMAST` written instead of `CUSTMAST (PRDLIB)` | Substitute library from FILES section on every mention |
+| Field name without description | `CUSTNO` written instead of `CUSTNO (Customer Number)` | Inline `(FIELD_TEXT)` from `ia_file_fields` on every occurrence |
+| Subroutine missing line range | Block header says only "SUBROUTINE_NAME" without `lines NNN–NNN` | Pull START/END line numbers from `ia_subroutines` and add to every block |
+| Rendered an exhaustive fields table | Section 3 has 200-row field tables when the program touches 8 fields | Drop the table entirely — fields are inline-only where the program logic references them |
+| Picked a filename without running Step 7.5 | New file lands as `BIO60R_Specification.md` or overwrites an existing `_v1` | Step 7.5 is mandatory; the only legitimate source of the filename string |
+| Counted legacy or subfolder files toward version | New file becomes `_v6` because `BIO60R_Program_Analysis_v5.md` exists | Step 7.5 only counts files matching `{PGM}_{CanonicalDocType}_v{N}.md` in the folder root |
+| Skipped `TodoWrite` kickoff | Agent jumped straight from Step 1 to `ia_program_spec_bundle` | Step 1.5 is mandatory; create the todo list before any `ia_*` call |
+| Missing ASCII process flow tree | Generated doc has no visual flow in the section required by its template | One ASCII tree (fenced `text` block, box-drawing chars) per template-required section |
 
 ---
 
@@ -556,15 +715,34 @@ FORMATTING GUIDELINES
 iA-SPECIFIC RULES (layered on top)
 --------------------------------
 MANDATORY SEQUENCE BEFORE WRITING:
+0. TodoWrite                                     → create todo list covering Step 2 → Step 9 BEFORE any ia_* call
 1. ia_program_spec_bundle(program_name=X)        → all 8 inventory sections in one call
-2. ia_rpg_source OR ia_cl_source (by MEMBER_TYPE) → business rule extraction from source
-3. ia_procedure_params(member_name=X)            → entry parameters (mandatory even if PARAMS returned rows)
+2. ia_program_files(member_name=X)               → file usage + FILE_TEXT descriptions + library
+3. ia_file_fields(file_name=F, library_name=L)   → every field's description, held as SILENT in-memory lookup (do NOT render as a table)
+4. ia_rpg_source OR ia_cl_source (by MEMBER_TYPE) → business rule extraction from source
+5. ia_procedure_params(member_name=X)            → entry parameters (mandatory even if PARAMS returned rows)
 
 If the bundle errors, fall back to the seven individual tools.
 
+NEVER read any file under docs/program-specs/. Each new document must be
+generated 100% from iA tool output. Listing the program's subfolder to
+compute the next _v{N+1} suffix is the only permitted interaction.
+
 NON-NEGOTIABLE RULES:
-- Every subroutine from SUBROUTINES must appear in Section 5; every cluster
-  feeds Section 6 (BRs).
+- Every subroutine from SUBROUTINES must appear in Section 5 with a
+  `lines START–END` header and `*(line NNN)*` anchors on every internal
+  decision/calculation/I-O/EXSR/CALLP; every cluster feeds Section 6 (BRs).
+- Every file mention must include its library: `FILENAME (LIBRARY)`.
+- Every file in Section 3 must have a description (from ia_program_files
+  FILE_TEXT or describe_sql_object). DO NOT render a per-file fields table —
+  fields appear only inline, where the program touches them, with the
+  format `FIELDNAME (Field Description)` from ia_file_fields.
+- Every generated document must contain at least one ASCII process flow tree
+  (fenced ```text``` block with box-drawing characters) in the section
+  required by its audience template — see template-developer.md /
+  template-business.md / template-architect.md / template-operations.md.
+- Every field reference anywhere in the document must carry its description
+  in parentheses on every mention: `FIELDNAME (Field Description)`.
 - Do not assert any called program not in CALLEES section.
 - Put data areas in a separate "Data Areas Used" subsection — never in the
   file table.
@@ -577,12 +755,18 @@ NON-NEGOTIABLE RULES:
   rows (bound procedures), with the actual library in the parent label.
 - HARD STOP after Step 2 if LOOKUP returns multiple versions — present table,
   ask user which to document, wait for explicit confirmation.
+- HARD STOP if any file's library is unresolved — ask the user.
 - HARD STOP on any mid-process ambiguity — pause and ask the user.
 
 OUTPUT FILE NAMING:
-- Always write to docs/program-specs/{PROGRAM_NAME}/.
-- Always create a NEW versioned file: `{PROGRAM_NAME}_Technical_Specification_v{N+1}.md`
-  where N is the highest existing version. Never overwrite previous versions.
+- Before naming, run Step 7.5 — Filename Resolution Gate. Do not invent a filename.
+- The filename Step 7.5 emits is the only legitimate save target:
+  `docs/program-specs/{PROGRAM_NAME}/{PROGRAM_NAME}_{CanonicalDocType}_v{N}.md`
+  with CanonicalDocType ∈ {Technical_Specification, Functional_Document,
+  Operations_Guide, Architecture_Review}.
+- Never overwrite an existing file. Legacy non-canonical files
+  (`{PGM}_Specification.md`, `{PGM}_Doc.md`, etc.) are left strictly in
+  place and do not count toward `_v{N}`.
 ```
 
 ---
@@ -594,14 +778,15 @@ OUTPUT FILE NAMING:
 | 1. Program Overview | LOOKUP + COMPLEXITY (DSPF/FILE counts for execution type) | Source header comments |
 | 2. Technical Summary — Entry Parameters | `ia_procedure_params` | dcl-pr/dcl-pi or *ENTRY PLIST in source |
 | 2. Technical Summary — Revisions / Assumptions | Source comments scan | — |
-| 3. Files and Data Sources | FILES section (with **actual library**) | `ia_object_references` |
+| 3. Files and Data Sources — file list + library + description | `ia_program_files` (FILE_TEXT) + FILES section | `describe_sql_object` for DDL TEXT |
 | 3. Data Areas Used | `ia_variable_ops(opcode=IN or OUT)` | Source D-spec / dcl-ds scan |
-| 4. Main Processing Logic | Source narrative + SUBROUTINES (for routing) | — |
-| 5. Subroutine / Procedure Analysis | SUBROUTINES section + source bodies | — |
+| Inline field descriptions (anywhere) | `ia_file_fields(file_name, library_name)` — silent lookup, called once per unique file in Step 2.5 | — |
+| 4. Main Processing Logic | Source narrative + SUBROUTINES (for routing); field descriptions from `ia_file_fields` | — |
+| 5. Subroutine / Procedure Analysis | SUBROUTINES section (START/END lines) + source bodies | — |
 | 5. Call Hierarchy Diagram | CALLEES + BINDINGS | — |
-| 6. Business Rules | SUBROUTINES → source IF/WHEN/SELECT/SQL clusters | — |
-| 7. Output File Behavior | FILES section (Output / Update) + source write/update opcodes | — |
-| 8. Glossary | Field names from FILES + variable scan | — |
+| 6. Business Rules | SUBROUTINES → source IF/WHEN/SELECT/SQL clusters; field descriptions from `ia_file_fields` | — |
+| 7. Output File Behavior | FILES section (Output / Update) + source write/update opcodes; field descriptions from `ia_file_fields` | — |
+| 8. Glossary | `ia_file_fields` FIELD_TEXT + variable scan | — |
 | 9. Key Observations — Callers | CALLERS section | — |
 | 9. Key Observations — Service Programs | BINDINGS section | — |
 | Statistics block | COMPLEXITY section | — |
